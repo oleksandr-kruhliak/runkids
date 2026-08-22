@@ -8,15 +8,15 @@
     "file": "cow.glb"
   },
   {
-    "name": "llama",
-    "file": "llama.glb"
-  },
-  {
-    "name": "pig",
-    "file": "pig.glb"
+    "name": "horse",
+    "file": "horse.glb"
   },
   {
     "name": "stag",
     "file": "stag.glb"
+  },
+  {
+    "name": "zebra",
+    "file": "zebra.glb"
   }
 ]
