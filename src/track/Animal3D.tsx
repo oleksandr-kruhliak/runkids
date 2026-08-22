@@ -1,33 +1,48 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 
 const TARGET_SIZE = 1.7 // world units the largest dimension is scaled to
+const RUN_REF_SPEED = 8 // speed at which the run clip plays at natural rate
+
+/** Pick the first clip whose name matches one of the patterns (in order). */
+function pickClip(clips: THREE.AnimationClip[], patterns: RegExp[]) {
+  for (const p of patterns) {
+    const c = clips.find((cl) => p.test(cl.name))
+    if (c) return c
+  }
+  return null
+}
+
+interface Animal3DProps {
+  url: string
+  faceY?: number
+  laneIndex?: number
+  /** Per-lane current forward speed; drives run-vs-idle animation. */
+  speedRef?: MutableRefObject<number[]>
+}
 
 /**
  * Loads a .glb model, clones it per rider (skeleton-safe so rigged/skinned
- * meshes render correctly), and auto-centers/scales it so it sits on the track
- * at a consistent size. `faceY` spins the model to face along the track (+Z)
- * if the source model faces another way. If the model ships an idle animation
- * we play it so the animal looks alive.
- *
- * Sizing is done in two stages: an initial guess measured from the loaded
- * source, then a one-time self-correction on the first rendered frame that
- * measures the actually-mounted model in world space and rescales it to
- * TARGET_SIZE. The correction makes the size robust to skinned-mesh /
- * clone-timing quirks where the up-front measurement can be wildly off (which
- * previously scaled the animals down to an invisible speck).
+ * meshes render correctly), auto-centers/scales it to a consistent size, and
+ * plays its animations: it blends between an idle clip and a run/gallop/walk
+ * clip based on how fast the animal is actually moving, so the animals walk
+ * while racing and stand still when held up. Models that only ship an idle
+ * clip (no walk) simply idle.
  */
-export default function Animal3D({ url, faceY = 0 }: { url: string; faceY?: number }) {
+export default function Animal3D({ url, faceY = 0, laneIndex = 0, speedRef }: Animal3DProps) {
   const gltf = useGLTF(url)
   const mixerRef = useRef<THREE.AnimationMixer | null>(null)
+  const runRef = useRef<THREE.AnimationAction | null>(null)
+  const idleRef = useRef<THREE.AnimationAction | null>(null)
+  const hasRun = useRef(false)
 
   const built = useMemo(() => {
     const source = gltf.scene as THREE.Object3D
 
-    // Initial guess from the source (loader has set its matrices up).
+    // Initial size guess from the loaded source.
     source.updateMatrixWorld(true)
     const box = new THREE.Box3().setFromObject(source)
     const size = box.getSize(new THREE.Vector3())
@@ -35,8 +50,7 @@ export default function Animal3D({ url, faceY = 0 }: { url: string; faceY?: numb
     const maxDim = Math.max(size.x, size.y, size.z) || 1
     const guess = TARGET_SIZE / maxDim
 
-    // SkeletonUtils.clone rebinds SkinnedMesh bones to the cloned skeleton —
-    // plain Object3D.clone(true) leaves them pointing at the original.
+    // Skeleton-safe clone so rigged meshes bind to their own skeleton.
     const model = cloneSkeleton(source)
     model.traverse((o) => {
       const mesh = o as THREE.Mesh
@@ -55,30 +69,66 @@ export default function Animal3D({ url, faceY = 0 }: { url: string; faceY?: numb
     outer.add(inner)
     outer.scale.setScalar(guess)
 
-    // Play an idle animation if the model ships one.
+    // Set up idle + locomotion animation actions on this clone.
     mixerRef.current = null
-    const clips = gltf.animations
-    if (clips && clips.length) {
-      const idle = clips.find((c) => /idle|stand|graz/i.test(c.name)) ?? clips[0]
+    runRef.current = null
+    idleRef.current = null
+    hasRun.current = false
+    const clips = gltf.animations ?? []
+    if (clips.length) {
       const mixer = new THREE.AnimationMixer(model)
-      mixer.clipAction(idle).play()
+      const idleClip = pickClip(clips, [/(^|\|)idle$/i, /idle/i]) ?? clips[0]
+      const runClip = pickClip(clips, [
+        /(^|\|)gallop$/i,
+        /(^|\|)run$/i,
+        /(^|\|)walk$/i,
+        /walk/i,
+        /gallop/i,
+      ])
+
+      const idle = mixer.clipAction(idleClip)
+      idle.play()
+      idleRef.current = idle
+
+      if (runClip && runClip !== idleClip) {
+        const run = mixer.clipAction(runClip)
+        run.play()
+        run.setEffectiveWeight(0)
+        runRef.current = run
+        hasRun.current = true
+      }
       mixerRef.current = mixer
     }
-    return { outer, inner, model }
+    return { outer, model }
   }, [gltf.scene, gltf.animations, faceY])
 
-  // One-time size correction once the model is mounted and its world matrices
-  // are real. Keep trying until we get a valid (non-degenerate) measurement.
+  // One-time size self-correction once the model is really mounted.
   const corrected = useRef(false)
   useEffect(() => {
     corrected.current = false
   }, [built])
-
   const boxHelper = useRef(new THREE.Box3())
   const sizeHelper = useRef(new THREE.Vector3())
 
   useFrame((_, delta) => {
-    mixerRef.current?.update(delta)
+    const mixer = mixerRef.current
+
+    // Blend idle <-> run based on the lane's current speed.
+    if (mixer && hasRun.current && runRef.current && idleRef.current) {
+      const speed = Math.abs(speedRef?.current?.[laneIndex] ?? 0)
+      const moving = speed > 0.2 ? 1 : 0
+      const run = runRef.current
+      const idle = idleRef.current
+      const w = run.getEffectiveWeight()
+      const nw = THREE.MathUtils.lerp(w, moving, Math.min(1, delta * 10))
+      run.setEffectiveWeight(nw)
+      idle.setEffectiveWeight(1 - nw)
+      // Speed the run cycle up/down a little with actual velocity.
+      run.setEffectiveTimeScale(
+        THREE.MathUtils.clamp(speed / RUN_REF_SPEED, 0.6, 1.8),
+      )
+    }
+    mixer?.update(delta)
 
     if (!corrected.current) {
       const { outer, model } = built
@@ -92,9 +142,6 @@ export default function Animal3D({ url, faceY = 0 }: { url: string; faceY?: numb
           sizeHelper.current.z,
         )
         if (maxDim > 1e-5) {
-          // Rescale so the largest world dimension equals TARGET_SIZE. This
-          // scales the whole `outer` (model offset included), so centering
-          // stays correct too.
           outer.scale.multiplyScalar(TARGET_SIZE / maxDim)
           corrected.current = true
         }

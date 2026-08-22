@@ -70,6 +70,9 @@ export default function Riders({
   // Active hammer-knock impulse per lane: until when, and which direction.
   const knockUntil = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
   const knockDir = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  // Per-lane current forward speed, so the 3D models can play a run/idle
+  // animation that matches whether the animal is actually moving.
+  const speedRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
 
   const m = useMemo(() => new THREE.Matrix4(), [])
   const q = useMemo(() => new THREE.Quaternion(), [])
@@ -116,6 +119,9 @@ export default function Riders({
         else if (t < knockUntil.current[l]) v = KNOCK_SPEED * knockDir.current[l]
         dist.current[l] += v * dt
         if (dist.current[l] < 0) dist.current[l] += len
+        speedRef.current[l] = v
+      } else {
+        speedRef.current[l] = 0
       }
 
       const f = sampleCenter(track.center, dist.current[l])
@@ -179,7 +185,12 @@ export default function Riders({
             {use ? (
               <ModelBoundary fallback={primitive}>
                 <Suspense fallback={null}>
-                  <Animal3D url={animalUrls[l % animalUrls.length]} faceY={faceY} />
+                  <Animal3D
+                    url={animalUrls[l % animalUrls.length]}
+                    faceY={faceY}
+                    laneIndex={l}
+                    speedRef={speedRef}
+                  />
                 </Suspense>
               </ModelBoundary>
             ) : (
