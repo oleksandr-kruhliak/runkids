@@ -1,1 +1,22 @@
-[]
+[
+  {
+    "name": "bull",
+    "file": "bull.glb"
+  },
+  {
+    "name": "cow",
+    "file": "cow.glb"
+  },
+  {
+    "name": "llama",
+    "file": "llama.glb"
+  },
+  {
+    "name": "pig",
+    "file": "pig.glb"
+  },
+  {
+    "name": "stag",
+    "file": "stag.glb"
+  }
+]
