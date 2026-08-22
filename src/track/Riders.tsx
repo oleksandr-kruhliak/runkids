@@ -28,13 +28,15 @@ interface RidersProps {
   leadRef: MutableRefObject<LeadState>
   /** Which lane the follow-cam tracks; -1 = whichever animal is leading. */
   followTarget: number
+  /** Per-lane current lap distance, published for obstacle hit detection. */
+  distancesRef: MutableRefObject<number[]>
 }
 
 const BASE_SPEED = 8
 const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
-const SPIN_KNOCKBACK = 5 // reverse speed while a spinner arm is over the animal
+const SPIN_KNOCKBACK = 9 // reverse speed while a spinner arm is over the animal
 
-export default function Riders({ track, playing, leadRef, followTarget }: RidersProps) {
+export default function Riders({ track, playing, leadRef, followTarget, distancesRef }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
 
@@ -97,6 +99,11 @@ export default function Riders({ track, playing, leadRef, followTarget }: Riders
       m.makeBasis(xAxis, yAxis, f.tangent)
       q.setFromRotationMatrix(m)
       g.quaternion.copy(q)
+
+      // Publish current lap distance for obstacle (crate) hit detection.
+      let lapNow = len > 0 ? dist.current[l] % len : dist.current[l]
+      if (lapNow < 0) lapNow += len
+      distancesRef.current[l] = lapNow
 
       if (dist.current[l] > leadDist) {
         leadDist = dist.current[l]

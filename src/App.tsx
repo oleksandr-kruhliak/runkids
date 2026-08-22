@@ -47,7 +47,7 @@ function defaultShape(): PieceType[] {
 // Dense obstacle run per lane (~20 each ≈ 10x the previous course), cycling a
 // varied pool with a per-lane offset so no two lanes are the same.
 const OBS_POOL: PieceType[] = [
-  'boost', 'water', 'mud', 'gap', 'trampoline', 'spinner', 'stopper', 'boost', 'water', 'spinner',
+  'boost', 'water', 'crates', 'mud', 'gap', 'spinner', 'trampoline', 'stopper', 'crates', 'spinner',
 ]
 const PER_LANE = 30
 
@@ -89,6 +89,7 @@ export default function App() {
     up: new THREE.Vector3(0, 1, 0),
     right: new THREE.Vector3(1, 0, 0),
   })
+  const distancesRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
 
   useEffect(() => {
     const lanes = track.lanes
@@ -182,7 +183,7 @@ export default function App() {
             </mesh>
           ))}
 
-          <Obstacles placements={track.placements} />
+          <Obstacles placements={track.placements} distancesRef={distancesRef} length={track.length} />
 
           {shape.length > 0 && (
             <group position={gate.pos} quaternion={gate.quaternion}>
@@ -202,7 +203,13 @@ export default function App() {
           )}
 
           {track.length > 0 && (
-            <Riders track={track} playing={playing} leadRef={leadRef} followTarget={followTarget} />
+            <Riders
+              track={track}
+              playing={playing}
+              leadRef={leadRef}
+              followTarget={followTarget}
+              distancesRef={distancesRef}
+            />
           )}
 
           <CameraRig

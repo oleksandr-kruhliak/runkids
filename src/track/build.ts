@@ -60,13 +60,15 @@ export interface ObstaclePlacement {
   quaternion: [number, number, number, number]
   length: number
   phase: number
+  lane: number
+  dist: number
 }
 
 // --- Timed obstacle behavior (shared by visuals and rider logic) ---
 export const STOPPER_UP = 3 // seconds raised (blocking)
 export const STOPPER_DOWN = 3 // seconds lowered (clear)
 export const SPINNER_SPEED = 2.2 // rad/s
-export const SPINNER_WINDOW = 0.55 // rad half-window where the arm covers the lane
+export const SPINNER_WINDOW = 0.85 // rad half-window where the arm covers the lane
 
 /** Is a stopper (identified by its phase) currently raised? */
 export function stopperUp(phase: number, t: number): boolean {
@@ -322,6 +324,8 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
         length: o.len,
         // Desync timed obstacles by seeding phase from position.
         phase: o.type === 'stopper' || o.type === 'spinner' ? o.dist : 0,
+        lane: l,
+        dist: o.dist,
       })
     }
   }

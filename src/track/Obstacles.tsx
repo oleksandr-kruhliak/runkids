@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { MutableRefObject, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
@@ -6,9 +6,9 @@ import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
 const W = LANE_WIDTH - 0.2
 
 /**
- * A "wheeling stick": a post at the lane edge with an arm that sweeps across
- * the road. Its rotation is synced to the same clock the rider logic reads,
- * so the animal is knocked back exactly when the arm passes over it.
+ * A low "wheeling stick": a short post at the lane edge with an arm that sweeps
+ * across the road near ground level. Rotation is synced to the rider logic, so
+ * the animal is knocked back when the arm passes over it.
  */
 function Spinner({ phase }: { phase: number }) {
   const arm = useRef<THREE.Group>(null)
@@ -17,23 +17,120 @@ function Spinner({ phase }: { phase: number }) {
   })
   const edgeX = LANE_WIDTH / 2 + 0.25
   const armLen = LANE_WIDTH + 0.6
+  const armY = 0.42 // low, near the animals' body height
   return (
     <group>
-      {/* Post at the side of the lane */}
-      <mesh position={[edgeX, 0.55, 0]}>
-        <cylinderGeometry args={[0.12, 0.15, 1.1, 12]} />
+      {/* Short post at the side of the lane */}
+      <mesh position={[edgeX, 0.28, 0]}>
+        <cylinderGeometry args={[0.13, 0.16, 0.56, 12]} />
         <meshStandardMaterial color="#455a64" metalness={0.4} roughness={0.5} />
       </mesh>
-      {/* Arm pivots at the post and reaches across the road */}
-      <group ref={arm} position={[edgeX, 0.95, 0]}>
+      {/* Arm pivots at the post and reaches across the road, low down */}
+      <group ref={arm} position={[edgeX, armY, 0]}>
         <mesh position={[-armLen / 2, 0, 0]}>
-          <boxGeometry args={[armLen, 0.18, 0.18]} />
+          <boxGeometry args={[armLen, 0.22, 0.22]} />
           <meshStandardMaterial color="#e53935" />
         </mesh>
         <mesh position={[-armLen + 0.15, 0, 0]}>
-          <boxGeometry args={[0.34, 0.36, 0.36]} />
+          <boxGeometry args={[0.4, 0.42, 0.42]} />
           <meshStandardMaterial color="#ffca28" emissive="#ff8f00" emissiveIntensity={0.4} />
         </mesh>
+      </group>
+    </group>
+  )
+}
+
+const FRAG_COUNT = 10
+const EXPLODE_DUR = 1.1 // seconds
+
+/**
+ * A stack of crates on the road. When the lane's animal passes their position,
+ * they burst into fragments that fly out and shrink, then re-form for next lap.
+ */
+function Crates({
+  lane,
+  dist,
+  distancesRef,
+  length,
+}: {
+  lane: number
+  dist: number
+  distancesRef: MutableRefObject<number[]>
+  length: number
+}) {
+  const intact = useRef<THREE.Group>(null)
+  const frag = useRef<THREE.Group>(null)
+  const st = useRef({ exploding: false, tStart: 0, prev: -1 })
+
+  // Deterministic fragment velocities.
+  const vels = useMemo(
+    () =>
+      Array.from({ length: FRAG_COUNT }, (_, i) => {
+        const a = (i / FRAG_COUNT) * Math.PI * 2 + i
+        const r = 2 + (i % 3)
+        return { x: Math.cos(a) * r, y: 2.5 + (i % 4) * 0.6, z: Math.sin(a) * r, spin: 4 + i }
+      }),
+    [],
+  )
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime
+    const d = distancesRef.current[lane] ?? 0
+    const s = st.current
+
+    if (!s.exploding && s.prev >= 0 && length > 0) {
+      const crossed =
+        s.prev <= d ? dist > s.prev && dist <= d : dist > s.prev || dist <= d
+      if (crossed) {
+        s.exploding = true
+        s.tStart = t
+        if (intact.current) intact.current.visible = false
+        if (frag.current) frag.current.visible = true
+      }
+    }
+    s.prev = d
+
+    if (s.exploding && frag.current) {
+      const e = t - s.tStart
+      const k = Math.max(0, 1 - e / EXPLODE_DUR)
+      frag.current.children.forEach((c, i) => {
+        const v = vels[i]
+        c.position.set(v.x * e, v.y * e - 3 * e * e, v.z * e)
+        c.rotation.set(v.spin * e, v.spin * e * 0.7, 0)
+        c.scale.setScalar(k)
+      })
+      if (e > EXPLODE_DUR) {
+        s.exploding = false
+        if (frag.current) frag.current.visible = false
+        if (intact.current) intact.current.visible = true
+      }
+    }
+  })
+
+  const crates: [number, number, number][] = [
+    [-0.5, 0.35, 0],
+    [0.5, 0.35, 0],
+    [0, 0.35, 0.5],
+    [0, 1.05, 0.15],
+  ]
+
+  return (
+    <group>
+      <group ref={intact}>
+        {crates.map((c, i) => (
+          <mesh key={i} position={c} castShadow>
+            <boxGeometry args={[0.66, 0.66, 0.66]} />
+            <meshStandardMaterial color={i === 3 ? '#c98a4a' : '#b5793b'} flatShading />
+          </mesh>
+        ))}
+      </group>
+      <group ref={frag} visible={false}>
+        {vels.map((_, i) => (
+          <mesh key={i} position={[0, 0.5, 0]}>
+            <boxGeometry args={[0.3, 0.3, 0.3]} />
+            <meshStandardMaterial color={i % 2 ? '#9c5f2c' : '#c98a4a'} flatShading />
+          </mesh>
+        ))}
       </group>
     </group>
   )
@@ -70,7 +167,15 @@ function Stopper({ phase }: { phase: number }) {
 }
 
 /** Renders themed meshes for each placed obstacle, oriented along the track. */
-export default function Obstacles({ placements }: { placements: ObstaclePlacement[] }) {
+export default function Obstacles({
+  placements,
+  distancesRef,
+  length,
+}: {
+  placements: ObstaclePlacement[]
+  distancesRef: MutableRefObject<number[]>
+  length: number
+}) {
   return (
     <>
       {placements.map((p) => (
@@ -136,6 +241,10 @@ export default function Obstacles({ placements }: { placements: ObstaclePlacemen
           {p.type === 'stopper' && <Stopper phase={p.phase} />}
 
           {p.type === 'spinner' && <Spinner phase={p.phase} />}
+
+          {p.type === 'crates' && (
+            <Crates lane={p.lane} dist={p.dist} distancesRef={distancesRef} length={length} />
+          )}
 
           {p.type === 'gap' &&
             [-p.length / 2, p.length / 2].map((z, i) => (

@@ -12,6 +12,7 @@ export type PieceType =
   | 'trampoline'
   | 'stopper'
   | 'spinner'
+  | 'crates'
 
 export type PieceGroup = 'shape' | 'obstacle'
 
@@ -26,6 +27,7 @@ export const OBSTACLE_PIECES: PieceType[] = [
   'trampoline',
   'stopper',
   'spinner',
+  'crates',
 ]
 
 export const PIECE_META: Record<
@@ -45,6 +47,7 @@ export const PIECE_META: Record<
   trampoline: { label: 'Bounce', icon: '⇈', group: 'obstacle' },
   stopper: { label: 'Stopper', icon: '🛑', group: 'obstacle' },
   spinner: { label: 'Spinner', icon: '🌀', group: 'obstacle' },
+  crates: { label: 'Crates', icon: '📦', group: 'obstacle' },
 }
 
 // Shape geometry (world units).
@@ -72,6 +75,7 @@ export const OBSTACLE_LEN: Record<PieceType, number> = {
   trampoline: 4,
   stopper: 3,
   spinner: 3,
+  crates: 3,
 }
 
 // Rider speed multiplier while inside an obstacle's zone. Stopper and spinner
@@ -91,4 +95,5 @@ export const SPEED_MULT: Record<PieceType, number> = {
   trampoline: 0.9,
   stopper: 1,
   spinner: 1,
+  crates: 0.8,
 }
