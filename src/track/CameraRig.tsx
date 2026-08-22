@@ -38,12 +38,18 @@ export default function CameraRig({ center, radius, follow, fitSignal, leadRef }
 
     if (follow && leadRef.current.active) {
       const lead = leadRef.current
+      // Close 3/4 head view: behind and to the side at head height, looking at
+      // the animal with the road beyond it — so the animal sits in frame.
       desired.current
         .copy(lead.pos)
-        .addScaledVector(lead.tangent, -9)
-        .addScaledVector(WORLD_UP, 5)
-      camera.position.lerp(desired.current, 0.08)
-      look.current.copy(lead.pos).addScaledVector(WORLD_UP, 0.8)
+        .addScaledVector(lead.tangent, -3.0)
+        .addScaledVector(lead.right, 1.7)
+        .addScaledVector(WORLD_UP, 1.4)
+      camera.position.lerp(desired.current, 0.14)
+      look.current
+        .copy(lead.pos)
+        .addScaledVector(lead.tangent, 0.8)
+        .addScaledVector(WORLD_UP, 0.55)
       camera.lookAt(look.current)
       needFit.current = false
       return

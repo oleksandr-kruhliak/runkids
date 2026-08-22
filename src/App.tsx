@@ -87,6 +87,7 @@ export default function App() {
     pos: new THREE.Vector3(),
     tangent: new THREE.Vector3(0, 0, 1),
     up: new THREE.Vector3(0, 1, 0),
+    right: new THREE.Vector3(1, 0, 0),
   })
 
   useEffect(() => {

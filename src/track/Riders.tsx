@@ -19,6 +19,7 @@ export interface LeadState {
   pos: THREE.Vector3
   tangent: THREE.Vector3
   up: THREE.Vector3
+  right: THREE.Vector3
 }
 
 interface RidersProps {
@@ -117,6 +118,7 @@ export default function Riders({ track, playing, leadRef, followTarget }: Riders
         .addScaledVector(f.up, RIDE_OFFSET)
       leadRef.current.tangent.copy(f.tangent)
       leadRef.current.up.copy(f.up)
+      leadRef.current.right.copy(f.right)
     }
   })
 
