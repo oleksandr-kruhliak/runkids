@@ -27,26 +27,39 @@ const mk = (kind: 'shape' | 'obstacle', pt: PieceType, lane?: number): Action =>
   lane,
 })
 
-// Default: a serpentine shape shared by all lanes, plus a different obstacle
-// set per lane so the five animals race and diverge.
-const DEFAULT_SHAPE: PieceType[] = [
-  'straight', 'straight', 'straight', 'straight', 'left', 'left',
-  'straight', 'straight', 'straight', 'straight', 'right', 'right',
-  'straight', 'straight', 'straight', 'straight', 'left', 'left',
-  'straight', 'straight', 'straight', 'straight', 'right', 'right',
-  'straight', 'straight', 'straight',
+// Default: a long serpentine (with a loop) shared by all lanes, packed with a
+// dense, per-lane obstacle run so the five animals race and diverge.
+function defaultShape(): PieceType[] {
+  const s: PieceType[] = []
+  for (let row = 0; row < 6; row++) {
+    for (let i = 0; i < 5; i++) {
+      s.push('straight')
+      if (row === 2 && i === 2) s.push('loop') // one Hot Wheels loop
+    }
+    if (row < 5) {
+      const turn: PieceType = row % 2 === 0 ? 'left' : 'right'
+      s.push(turn, turn) // U-turn to snake back
+    }
+  }
+  return s
+}
+
+// Dense obstacle run per lane (~20 each ≈ 10x the previous course), cycling a
+// varied pool with a per-lane offset so no two lanes are the same.
+const OBS_POOL: PieceType[] = [
+  'boost', 'water', 'mud', 'gap', 'trampoline', 'spinner', 'stopper', 'boost', 'water', 'spinner',
 ]
-const DEFAULT_LANE_OBS: PieceType[][] = [
-  ['boost', 'water', 'gap'],
-  ['mud', 'boost', 'trampoline'],
-  ['water', 'gap', 'boost'],
-  ['gap', 'mud', 'water'],
-  ['boost', 'trampoline', 'gap'],
-]
+const PER_LANE = 30
+
+function defaultLaneObs(): PieceType[][] {
+  return Array.from({ length: NUM_LANES }, (_, lane) =>
+    Array.from({ length: PER_LANE }, (_, j) => OBS_POOL[(j + lane * 3) % OBS_POOL.length]),
+  )
+}
 
 function defaultActions(): Action[] {
-  const a: Action[] = DEFAULT_SHAPE.map((pt) => mk('shape', pt))
-  DEFAULT_LANE_OBS.forEach((obs, lane) => obs.forEach((pt) => a.push(mk('obstacle', pt, lane))))
+  const a: Action[] = defaultShape().map((pt) => mk('shape', pt))
+  defaultLaneObs().forEach((obs, lane) => obs.forEach((pt) => a.push(mk('obstacle', pt, lane))))
   return a
 }
 

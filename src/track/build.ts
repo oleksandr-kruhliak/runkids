@@ -1,5 +1,8 @@
 import * as THREE from 'three'
 import {
+  LOOP_ADVANCE,
+  LOOP_RADIUS,
+  LOOP_SAMPLES,
   OBSTACLE_LEN,
   PieceType,
   RAMP_HEIGHT,
@@ -75,38 +78,68 @@ const SAMPLES: Record<string, number> = {
   rampDown: 12,
 }
 
-/** Walk shape pieces into a dense centerline with orientation frames. */
+/**
+ * Walk shape pieces into a dense centerline. Most pieces stay level and let the
+ * up-vector be derived later; the loop supplies explicit up-vectors so the
+ * track can go fully vertical and inverted.
+ */
 function buildCenter(shape: PieceType[]): Center {
   const points: THREE.Vector3[] = []
+  const explicitUps: (THREE.Vector3 | null)[] = []
   const pos = new THREE.Vector3(0, 0, 0)
   let yaw = 0
   points.push(pos.clone())
+  explicitUps.push(null)
+
+  const push = (up: THREE.Vector3 | null = null) => {
+    points.push(pos.clone())
+    explicitUps.push(up)
+  }
 
   for (const type of shape) {
-    const n = SAMPLES[type] ?? 8
     if (type === 'left' || type === 'right') {
+      const n = SAMPLES[type]
       const sign = type === 'left' ? 1 : -1
       const dYaw = (sign * TURN_ANGLE) / n
       const stepLen = (TURN_RADIUS * TURN_ANGLE) / n
       for (let i = 1; i <= n; i++) {
         yaw += dYaw
         pos.addScaledVector(forwardVec(yaw), stepLen)
-        points.push(pos.clone())
+        push()
       }
     } else if (type === 'rampUp' || type === 'rampDown') {
+      const n = SAMPLES[type]
       const sign = type === 'rampUp' ? 1 : -1
       const f = forwardVec(yaw)
       const startY = pos.y
       for (let i = 1; i <= n; i++) {
         pos.addScaledVector(f, RAMP_LEN / n)
         pos.y = startY + sign * RAMP_HEIGHT * smoothstep(i / n)
-        points.push(pos.clone())
+        push()
       }
+    } else if (type === 'loop') {
+      const n = LOOP_SAMPLES
+      const start = pos.clone()
+      const f = forwardVec(yaw)
+      for (let i = 1; i <= n; i++) {
+        const th = (2 * Math.PI * i) / n
+        pos
+          .copy(start)
+          .addScaledVector(f, LOOP_RADIUS * Math.sin(th) + LOOP_ADVANCE * (i / n))
+          .addScaledVector(UP, LOOP_RADIUS * (1 - Math.cos(th)))
+        const up = new THREE.Vector3()
+          .addScaledVector(f, -Math.sin(th))
+          .addScaledVector(UP, Math.cos(th))
+          .normalize()
+        push(up)
+      }
+      pos.copy(start).addScaledVector(f, LOOP_ADVANCE)
     } else {
+      const n = SAMPLES.straight
       const f = forwardVec(yaw)
       for (let i = 1; i <= n; i++) {
         pos.addScaledVector(f, STRAIGHT_LEN / n)
-        points.push(pos.clone())
+        push()
       }
     }
   }
@@ -122,13 +155,24 @@ function buildCenter(shape: PieceType[]): Center {
 
   const ups: THREE.Vector3[] = []
   const rights: THREE.Vector3[] = []
-  for (const t of tangents) {
-    const right = new THREE.Vector3().crossVectors(t, UP)
-    if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
-    right.normalize()
-    const up = new THREE.Vector3().crossVectors(right, t).normalize()
+  for (let i = 0; i < points.length; i++) {
+    const t = tangents[i]
+    let up = explicitUps[i]
+    if (up) {
+      // Re-orthogonalize the supplied up against the tangent.
+      const right = new THREE.Vector3().crossVectors(t, up)
+      if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
+      right.normalize()
+      up = new THREE.Vector3().crossVectors(right, t).normalize()
+      rights.push(right)
+    } else {
+      const right = new THREE.Vector3().crossVectors(t, UP)
+      if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
+      right.normalize()
+      up = new THREE.Vector3().crossVectors(right, t).normalize()
+      rights.push(right)
+    }
     ups.push(up)
-    rights.push(right)
   }
 
   const cum: number[] = [0]
@@ -175,7 +219,7 @@ function buildLaneGeometry(center: Center, offset: number, gaps: [number, number
   const half = LANE_WIDTH / 2
   const positions: number[] = []
 
-  const laneC: THREE.Vector3[] = points.map((p, i) => p.clone().addScaledVector(rights[i], offset))
+  const laneC = points.map((p, i) => p.clone().addScaledVector(rights[i], offset))
   const baseL = laneC.map((c, i) => c.clone().addScaledVector(rights[i], -half))
   const baseR = laneC.map((c, i) => c.clone().addScaledVector(rights[i], half))
   const topL = baseL.map((b, i) => b.clone().addScaledVector(ups[i], WALL_HEIGHT))
@@ -239,7 +283,6 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
       obstacles,
     })
 
-    // Placement transforms for obstacle visuals.
     for (const o of obstacles) {
       const f = sampleCenter(center, o.dist)
       const p = f.pos.clone().addScaledVector(f.right, offset)
