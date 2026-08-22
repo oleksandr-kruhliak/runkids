@@ -14,6 +14,10 @@ const MAX_HALF = 58 // cap on the field half-size
 const CORRIDOR = ((NUM_LANES - 1) / 2) * LANE_SPACING + 0.2
 const KEEP = 0.55 // fraction of each patch's blades kept (thins it for density)
 
+// Bright greens for the grass (the model's own greens are dark/olive).
+const GRASS_LIGHT = new THREE.Color('#83e05a')
+const GRASS_DARK = new THREE.Color('#5fbf3c')
+
 // Deterministic pseudo-random so tufts don't jump between renders.
 function rnd(n: number) {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
@@ -29,8 +33,9 @@ function buildGrassGeometry(scene: THREE.Object3D): THREE.BufferGeometry {
     if (!mesh.isMesh) return
     const g = mesh.geometry.clone()
     g.applyMatrix4(mesh.matrixWorld)
-    const mat = mesh.material as THREE.MeshStandardMaterial
-    const c = mat?.color ?? new THREE.Color(0.2, 0.5, 0.1)
+    // The model has two greens; map them to bright greens for a fresher field.
+    const name = (mesh.material as THREE.Material)?.name ?? ''
+    const c = /10/.test(name) ? GRASS_DARK : GRASS_LIGHT
     const n = g.attributes.position.count
     const colors = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) {

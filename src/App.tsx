@@ -249,14 +249,14 @@ export default function App() {
 
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
             <planeGeometry args={[1000, 1000]} />
-            <meshStandardMaterial color="#a5d6a7" />
+            <meshStandardMaterial color="#7ed957" />
           </mesh>
           <Grid
             args={[1000, 1000]}
             cellSize={2}
-            cellColor="#8bc48f"
+            cellColor="#74cc4e"
             sectionSize={10}
-            sectionColor="#6aa870"
+            sectionColor="#5fb83c"
             fadeDistance={180}
           />
 
