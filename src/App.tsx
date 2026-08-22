@@ -7,6 +7,7 @@ import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from '.
 import { ANIMAL_PALETTES } from './track/Animal'
 import Riders, { LeadState } from './track/Riders'
 import Obstacles from './track/Obstacles'
+import StoneRoad from './track/StoneRoad'
 import CameraRig, { FollowCam } from './track/CameraRig'
 import './styles.css'
 
@@ -258,11 +259,7 @@ export default function App() {
             fadeDistance={180}
           />
 
-          {track.lanes.map((lane) => (
-            <mesh key={lane.index} geometry={lane.geometry} castShadow receiveShadow>
-              <meshStandardMaterial color={lane.color} side={THREE.DoubleSide} flatShading />
-            </mesh>
-          ))}
+          <StoneRoad track={track} />
 
           <Obstacles placements={track.placements} distancesRef={distancesRef} length={track.length} />
 
