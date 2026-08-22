@@ -141,19 +141,68 @@ body {
   z-index: 5;
 }
 
-.palette {
-  display: flex;
-  gap: 14px;
-  overflow-x: auto;
-  padding-bottom: 10px;
-  -webkit-overflow-scrolling: touch;
+.toolbar {
+  max-height: 46vh;
+  overflow-y: auto;
 }
 
 .palette-group {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 0 0 auto;
+  margin-bottom: 10px;
+}
+
+.pieces {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+
+.lanes {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.lane-chip {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: #eef1f5;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.lane-chip .lane-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lane-color);
+  flex-shrink: 0;
+}
+
+.lane-chip.active {
+  border-color: var(--lane-color);
+  background: #fff;
+}
+
+.action-count {
+  flex: 1;
+  text-align: center;
+  align-self: center;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .group-title {

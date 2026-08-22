@@ -1,7 +1,15 @@
 import { MutableRefObject, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { RIDE_OFFSET, Track, jumpOffset, sampleTrack, speedMultiplier } from './build'
+import {
+  NUM_LANES,
+  RIDE_OFFSET,
+  Track,
+  jumpOffset,
+  laneEffect,
+  sampleCenter,
+  speedMultiplier,
+} from './build'
 import Animal, { ANIMAL_PALETTES } from './Animal'
 
 export interface LeadState {
@@ -14,29 +22,14 @@ export interface LeadState {
 interface RidersProps {
   track: Track
   playing: boolean
-  count: number
   leadRef: MutableRefObject<LeadState>
 }
 
-const BASE_SPEED = 8 // world units / second
+const BASE_SPEED = 8
 
-export default function Riders({ track, playing, count, leadRef }: RidersProps) {
+export default function Riders({ track, playing, leadRef }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
-
-  const riders = useMemo(
-    () =>
-      Array.from({ length: count }, (_, i) => ({
-        colors: ANIMAL_PALETTES[i % ANIMAL_PALETTES.length],
-        speed: BASE_SPEED * (0.92 + 0.06 * i),
-        offset: i * 6,
-      })),
-    [count],
-  )
-
-  const dist = useRef<number[]>([])
-  if (dist.current.length !== count) {
-    dist.current = riders.map((r) => r.offset)
-  }
+  const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
 
   const m = useMemo(() => new THREE.Matrix4(), [])
   const q = useMemo(() => new THREE.Quaternion(), [])
@@ -45,57 +38,64 @@ export default function Riders({ track, playing, count, leadRef }: RidersProps) 
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05)
+    const len = track.length
     let leadIdx = 0
     let leadDist = -Infinity
 
-    for (let i = 0; i < count; i++) {
-      const g = groupRefs.current[i]
-      if (!g) continue
+    for (let l = 0; l < NUM_LANES; l++) {
+      const g = groupRefs.current[l]
+      const lane = track.lanes[l]
+      if (!g || !lane) continue
 
-      const s = sampleTrack(track, dist.current[i])
-      if (playing) dist.current[i] += riders[i].speed * speedMultiplier(s.type) * dt
+      const effect = laneEffect(lane, dist.current[l], len)
+      if (playing) dist.current[l] += BASE_SPEED * speedMultiplier(effect.type) * dt
 
-      // Base position in the channel, plus jump/spring/water offset.
-      g.position.copy(s.pos).addScaledVector(s.up, RIDE_OFFSET)
-      g.position.y += jumpOffset(s.type, s.u)
-
-      // A little hop bounce while moving on solid track.
-      if (playing && s.type !== 'gap' && s.type !== 'spring') {
-        g.position.y += Math.abs(Math.sin(dist.current[i] * 1.4)) * 0.06
+      const f = sampleCenter(track.center, dist.current[l])
+      g.position
+        .copy(f.pos)
+        .addScaledVector(f.right, lane.offset)
+        .addScaledVector(f.up, RIDE_OFFSET)
+      g.position.y += jumpOffset(effect.type, effect.u)
+      if (playing && effect.type !== 'gap' && effect.type !== 'trampoline') {
+        g.position.y += Math.abs(Math.sin(dist.current[l] * 1.4)) * 0.06
       }
 
-      // Orient: local +Z = tangent, local +Y = track up.
-      xAxis.crossVectors(s.up, s.tangent).normalize()
-      yAxis.crossVectors(s.tangent, xAxis).normalize()
-      m.makeBasis(xAxis, yAxis, s.tangent)
+      xAxis.crossVectors(f.up, f.tangent).normalize()
+      yAxis.crossVectors(f.tangent, xAxis).normalize()
+      m.makeBasis(xAxis, yAxis, f.tangent)
       q.setFromRotationMatrix(m)
       g.quaternion.copy(q)
 
-      if (dist.current[i] > leadDist) {
-        leadDist = dist.current[i]
-        leadIdx = i
+      if (dist.current[l] > leadDist) {
+        leadDist = dist.current[l]
+        leadIdx = l
       }
     }
 
-    // Publish the lead rider for the follow-cam.
-    const lead = sampleTrack(track, dist.current[leadIdx])
-    leadRef.current.active = true
-    leadRef.current.pos.copy(lead.pos).addScaledVector(lead.up, RIDE_OFFSET)
-    leadRef.current.tangent.copy(lead.tangent)
-    leadRef.current.up.copy(lead.up)
+    const leadLane = track.lanes[leadIdx]
+    if (leadLane) {
+      const f = sampleCenter(track.center, dist.current[leadIdx])
+      leadRef.current.active = true
+      leadRef.current.pos
+        .copy(f.pos)
+        .addScaledVector(f.right, leadLane.offset)
+        .addScaledVector(f.up, RIDE_OFFSET)
+      leadRef.current.tangent.copy(f.tangent)
+      leadRef.current.up.copy(f.up)
+    }
   })
 
   return (
     <>
-      {riders.map((r, i) => (
+      {Array.from({ length: NUM_LANES }, (_, l) => (
         <group
-          key={i}
+          key={l}
           ref={(el) => {
-            groupRefs.current[i] = el
+            groupRefs.current[l] = el
           }}
-          scale={0.9}
+          scale={0.82}
         >
-          <Animal colors={r.colors} />
+          <Animal colors={ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]} />
         </group>
       ))}
     </>

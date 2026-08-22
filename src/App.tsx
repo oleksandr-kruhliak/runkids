@@ -2,49 +2,71 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid } from '@react-three/drei'
 import * as THREE from 'three'
-import {
-  OBSTACLE_PIECES,
-  TRACK_PIECES,
-  PIECE_META,
-  Piece,
-  PieceType,
-  makePiece,
-} from './track/pieces'
-import { buildTrack } from './track/build'
+import { OBSTACLE_PIECES, SHAPE_PIECES, PIECE_META, PieceType } from './track/pieces'
+import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from './track/build'
+import { ANIMAL_PALETTES } from './track/Animal'
 import Riders, { LeadState } from './track/Riders'
 import Obstacles from './track/Obstacles'
 import CameraRig from './track/CameraRig'
 import './styles.css'
 
-// A long (~5x) serpentine starter course that folds back on itself so it stays
-// compact on screen, showing off every obstacle along the way.
-const DEFAULT_TRACK: PieceType[] = [
-  // row 1
-  'straight', 'boost', 'straight', 'water', 'straight',
-  'left', 'left',
-  // row 2
-  'straight', 'mud', 'straight', 'gap', 'straight',
-  'right', 'right',
-  // row 3
-  'straight', 'spring', 'straight', 'boost', 'straight',
-  'left', 'left',
-  // row 4
-  'straight', 'water', 'rampUp', 'rampDown', 'straight',
-  'right', 'right',
-  // row 5
-  'straight', 'mud', 'straight', 'gap', 'straight',
-  'left', 'left',
-  // row 6
-  'straight', 'boost', 'spring', 'straight', 'water', 'straight',
+interface Action {
+  id: number
+  kind: 'shape' | 'obstacle'
+  pt: PieceType
+  lane?: number
+}
+
+const LANE_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
+
+let actionId = 0
+const mk = (kind: 'shape' | 'obstacle', pt: PieceType, lane?: number): Action => ({
+  id: actionId++,
+  kind,
+  pt,
+  lane,
+})
+
+// Default: a serpentine shape shared by all lanes, plus a different obstacle
+// set per lane so the five animals race and diverge.
+const DEFAULT_SHAPE: PieceType[] = [
+  'straight', 'straight', 'straight', 'straight', 'left', 'left',
+  'straight', 'straight', 'straight', 'straight', 'right', 'right',
+  'straight', 'straight', 'straight', 'straight', 'left', 'left',
+  'straight', 'straight', 'straight', 'straight', 'right', 'right',
+  'straight', 'straight', 'straight',
+]
+const DEFAULT_LANE_OBS: PieceType[][] = [
+  ['boost', 'water', 'gap'],
+  ['mud', 'boost', 'trampoline'],
+  ['water', 'gap', 'boost'],
+  ['gap', 'mud', 'water'],
+  ['boost', 'trampoline', 'gap'],
 ]
 
+function defaultActions(): Action[] {
+  const a: Action[] = DEFAULT_SHAPE.map((pt) => mk('shape', pt))
+  DEFAULT_LANE_OBS.forEach((obs, lane) => obs.forEach((pt) => a.push(mk('obstacle', pt, lane))))
+  return a
+}
+
 export default function App() {
-  const [pieces, setPieces] = useState<Piece[]>(() => DEFAULT_TRACK.map(makePiece))
+  const [actions, setActions] = useState<Action[]>(() => defaultActions())
+  const [selectedLane, setSelectedLane] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [follow, setFollow] = useState(false)
   const [fitSignal, setFitSignal] = useState(0)
 
-  const track = useMemo(() => buildTrack(pieces), [pieces])
+  const { shape, laneObstacles } = useMemo(() => {
+    const shape = actions.filter((a) => a.kind === 'shape').map((a) => a.pt)
+    const laneObstacles: PieceType[][] = Array.from({ length: NUM_LANES }, () => [])
+    for (const a of actions) {
+      if (a.kind === 'obstacle' && a.lane != null) laneObstacles[a.lane].push(a.pt)
+    }
+    return { shape, laneObstacles }
+  }, [actions])
+
+  const track = useMemo(() => buildTrack(shape, laneObstacles), [shape, laneObstacles])
 
   const leadRef = useRef<LeadState>({
     active: false,
@@ -54,14 +76,16 @@ export default function App() {
   })
 
   useEffect(() => {
-    const geo = track.geometry
-    return () => geo.dispose()
+    const lanes = track.lanes
+    return () => lanes.forEach((l) => l.geometry.dispose())
   }, [track])
 
-  const add = (type: PieceType) => setPieces((p) => [...p, makePiece(type)])
-  const undo = () => setPieces((p) => p.slice(0, -1))
+  const obstacleCount = actions.filter((a) => a.kind === 'obstacle').length
+  const addShape = (pt: PieceType) => setActions((a) => [...a, mk('shape', pt)])
+  const addObstacle = (pt: PieceType) => setActions((a) => [...a, mk('obstacle', pt, selectedLane)])
+  const undo = () => setActions((a) => a.slice(0, -1))
   const clear = () => {
-    setPieces([])
+    setActions([])
     setPlaying(false)
     setFollow(false)
   }
@@ -70,7 +94,19 @@ export default function App() {
     setFitSignal((n) => n + 1)
   }
 
-  const startPoint = track.points[0] ?? new THREE.Vector3()
+  // Start/finish gate spanning all lanes, oriented to the track start.
+  const gate = useMemo(() => {
+    const f = sampleCenter(track.center, 0)
+    const x = new THREE.Vector3().crossVectors(f.up, f.tangent).normalize()
+    const y = new THREE.Vector3().crossVectors(f.tangent, x).normalize()
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, f.tangent))
+    const halfW = ((NUM_LANES - 1) / 2) * LANE_SPACING + LANE_WIDTH / 2 + 0.6
+    return {
+      pos: [f.pos.x, f.pos.y, f.pos.z] as [number, number, number],
+      quaternion: [q.x, q.y, q.z, q.w] as [number, number, number, number],
+      halfW,
+    }
+  }, [track])
 
   return (
     <div className="app">
@@ -79,11 +115,11 @@ export default function App() {
           <span className="logo">🏁</span>
           <div>
             <h1>Runkids</h1>
-            <p>Track Builder</p>
+            <p>Race Builder</p>
           </div>
         </div>
         <div className="topbar-right">
-          <button className="mini" onClick={fit} disabled={pieces.length === 0}>
+          <button className="mini" onClick={fit} disabled={shape.length === 0}>
             ⤢ Fit
           </button>
           <button
@@ -93,24 +129,23 @@ export default function App() {
           >
             🎥 Follow
           </button>
-          <span className="counts">{pieces.length} pcs</span>
         </div>
       </header>
 
       <div className="stage">
-        <Canvas shadows camera={{ position: [22, 18, 26], fov: 50 }} dpr={[1, 2]}>
+        <Canvas shadows camera={{ position: [26, 20, 30], fov: 50 }} dpr={[1, 2]}>
           <color attach="background" args={['#dfeffb']} />
-          <fog attach="fog" args={['#dfeffb', 60, 200]} />
+          <fog attach="fog" args={['#dfeffb', 70, 220]} />
           <hemisphereLight args={['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
-            position={[20, 30, 12]}
+            position={[24, 34, 14]}
             intensity={1.5}
             castShadow
             shadow-mapSize={[2048, 2048]}
-            shadow-camera-left={-70}
-            shadow-camera-right={70}
-            shadow-camera-top={70}
-            shadow-camera-bottom={-70}
+            shadow-camera-left={-90}
+            shadow-camera-right={90}
+            shadow-camera-top={90}
+            shadow-camera-bottom={-90}
           />
 
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
@@ -123,101 +158,115 @@ export default function App() {
             cellColor="#8bc48f"
             sectionSize={10}
             sectionColor="#6aa870"
-            fadeDistance={160}
+            fadeDistance={180}
           />
 
-          {track.points.length > 1 && (
-            <mesh geometry={track.geometry} castShadow receiveShadow>
-              <meshStandardMaterial color="#ff7a1a" side={THREE.DoubleSide} flatShading />
+          {track.lanes.map((lane) => (
+            <mesh key={lane.index} geometry={lane.geometry} castShadow receiveShadow>
+              <meshStandardMaterial color={lane.color} side={THREE.DoubleSide} flatShading />
             </mesh>
-          )}
+          ))}
 
-          <Obstacles segments={track.segments} />
+          <Obstacles placements={track.placements} />
 
-          {track.points.length > 1 && (
-            <group position={[startPoint.x, startPoint.y, startPoint.z]}>
-              <mesh position={[-1.7, 1.1, 0]} castShadow>
+          {shape.length > 0 && (
+            <group position={gate.pos} quaternion={gate.quaternion}>
+              <mesh position={[-gate.halfW, 1.1, 0]} castShadow>
                 <boxGeometry args={[0.25, 2.2, 0.25]} />
                 <meshStandardMaterial color="#ffffff" />
               </mesh>
-              <mesh position={[1.7, 1.1, 0]} castShadow>
+              <mesh position={[gate.halfW, 1.1, 0]} castShadow>
                 <boxGeometry args={[0.25, 2.2, 0.25]} />
                 <meshStandardMaterial color="#ffffff" />
               </mesh>
               <mesh position={[0, 2.3, 0]} castShadow>
-                <boxGeometry args={[3.9, 0.4, 0.25]} />
+                <boxGeometry args={[gate.halfW * 2, 0.4, 0.25]} />
                 <meshStandardMaterial color="#e53935" />
               </mesh>
             </group>
           )}
 
-          {track.length > 0 && (
-            <Riders track={track} playing={playing} count={5} leadRef={leadRef} />
-          )}
+          {track.length > 0 && <Riders track={track} playing={playing} leadRef={leadRef} />}
 
           <CameraRig
-            center={track.center}
+            center={track.boundsCenter}
             radius={track.radius}
             follow={follow}
             fitSignal={fitSignal}
             leadRef={leadRef}
           />
-          <OrbitControls
-            makeDefault
-            enabled={!follow}
-            enableDamping
-            maxPolarAngle={Math.PI / 2.05}
-          />
+          <OrbitControls makeDefault enabled={!follow} enableDamping maxPolarAngle={Math.PI / 2.05} />
         </Canvas>
 
-        {pieces.length === 0 && (
-          <div className="hint-overlay">Tap a piece below to start building</div>
+        {shape.length === 0 && (
+          <div className="hint-overlay">Tap a Track piece below to start building</div>
         )}
       </div>
 
       <div className="toolbar">
-        <div className="palette">
-          <div className="palette-group">
-            <span className="group-title">Track</span>
-            <div className="pieces">
-              {TRACK_PIECES.map((type) => (
-                <button key={type} className={`piece-btn ${type}`} onClick={() => add(type)}>
-                  <span className="piece-icon">{PIECE_META[type].icon}</span>
-                  <span className="piece-label">{PIECE_META[type].label}</span>
-                </button>
-              ))}
-            </div>
+        <div className="palette-group">
+          <span className="group-title">Track shape (all lanes)</span>
+          <div className="pieces">
+            {SHAPE_PIECES.map((type) => (
+              <button key={type} className={`piece-btn ${type}`} onClick={() => addShape(type)}>
+                <span className="piece-icon">{PIECE_META[type].icon}</span>
+                <span className="piece-label">{PIECE_META[type].label}</span>
+              </button>
+            ))}
           </div>
-          <div className="palette-group">
-            <span className="group-title">Obstacles</span>
-            <div className="pieces">
-              {OBSTACLE_PIECES.map((type) => (
-                <button
-                  key={type}
-                  className={`piece-btn obstacle ${type}`}
-                  onClick={() => add(type)}
-                >
-                  <span className="piece-icon">{PIECE_META[type].icon}</span>
-                  <span className="piece-label">{PIECE_META[type].label}</span>
-                </button>
-              ))}
-            </div>
+        </div>
+
+        <div className="palette-group">
+          <span className="group-title">Lane to edit</span>
+          <div className="lanes">
+            {Array.from({ length: NUM_LANES }, (_, l) => (
+              <button
+                key={l}
+                className={`lane-chip ${selectedLane === l ? 'active' : ''}`}
+                style={{ ['--lane-color' as string]: ANIMAL_PALETTES[l].body }}
+                onClick={() => setSelectedLane(l)}
+              >
+                <span className="lane-dot" />
+                {LANE_NAMES[l]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="palette-group">
+          <span className="group-title">
+            Add obstacle to <b style={{ color: ANIMAL_PALETTES[selectedLane].body }}>{LANE_NAMES[selectedLane]}</b>
+          </span>
+          <div className="pieces">
+            {OBSTACLE_PIECES.map((type) => (
+              <button
+                key={type}
+                className={`piece-btn obstacle ${type}`}
+                onClick={() => addObstacle(type)}
+              >
+                <span className="piece-icon">{PIECE_META[type].icon}</span>
+                <span className="piece-label">{PIECE_META[type].label}</span>
+              </button>
+            ))}
           </div>
         </div>
 
         <div className="actions">
-          <button className="action" onClick={undo} disabled={pieces.length === 0}>
+          <button className="action" onClick={undo} disabled={actions.length === 0}>
             ↶ Undo
           </button>
-          <button className="action" onClick={clear} disabled={pieces.length === 0}>
+          <button className="action" onClick={clear} disabled={actions.length === 0}>
             ✕ Clear
           </button>
+          <span className="action-count">
+            {shape.length} shape · {obstacleCount} obs
+          </span>
           <button
             className={`action play ${playing ? 'on' : ''}`}
             onClick={() => setPlaying((p) => !p)}
             disabled={track.length === 0}
           >
-            {playing ? '■ Stop' : '▶ Play'}
+            {playing ? '■ Stop' : '▶ Race'}
           </button>
         </div>
       </div>

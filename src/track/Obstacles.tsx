@@ -1,46 +1,16 @@
-import { useMemo } from 'react'
-import * as THREE from 'three'
-import { Segment, TRACK_WIDTH } from './build'
+import { LANE_WIDTH, ObstaclePlacement } from './build'
 
-const W = TRACK_WIDTH - 0.3
+const W = LANE_WIDTH - 0.2
 
-interface Placed {
-  key: number
-  type: Segment['type']
-  position: [number, number, number]
-  quaternion: [number, number, number, number]
-  length: number
-}
-
-/** Renders themed meshes for each obstacle segment, oriented along the track. */
-export default function Obstacles({ segments }: { segments: Segment[] }) {
-  const placed = useMemo<Placed[]>(() => {
-    const m = new THREE.Matrix4()
-    const q = new THREE.Quaternion()
-    const x = new THREE.Vector3()
-    const y = new THREE.Vector3()
-    return segments.map((s, i) => {
-      x.crossVectors(s.up, s.tangent).normalize()
-      y.crossVectors(s.tangent, x).normalize()
-      m.makeBasis(x, y, s.tangent)
-      q.setFromRotationMatrix(m)
-      return {
-        key: i,
-        type: s.type,
-        position: [s.center.x, s.center.y, s.center.z],
-        quaternion: [q.x, q.y, q.z, q.w],
-        length: Math.max(s.length, 1),
-      }
-    })
-  }, [segments])
-
+/** Renders themed meshes for each placed obstacle, oriented along the track. */
+export default function Obstacles({ placements }: { placements: ObstaclePlacement[] }) {
   return (
     <>
-      {placed.map((p) => (
+      {placements.map((p) => (
         <group key={p.key} position={p.position} quaternion={p.quaternion}>
           {p.type === 'water' && (
-            <mesh position={[0, 0.22, 0]}>
-              <boxGeometry args={[W, 0.42, p.length]} />
+            <mesh position={[0, 0.2, 0]}>
+              <boxGeometry args={[W, 0.4, p.length]} />
               <meshStandardMaterial
                 color="#2196f3"
                 transparent
@@ -61,28 +31,49 @@ export default function Obstacles({ segments }: { segments: Segment[] }) {
           {p.type === 'boost' &&
             [-p.length / 3, 0, p.length / 3].map((z, i) => (
               <mesh key={i} position={[0, 0.12, z]} rotation={[-Math.PI / 2, 0, 0]}>
-                <coneGeometry args={[0.7, 1.1, 4]} />
+                <coneGeometry args={[0.55, 1.0, 4]} />
                 <meshStandardMaterial color="#ffd21a" emissive="#ffa000" emissiveIntensity={0.6} />
               </mesh>
             ))}
 
-          {p.type === 'spring' && (
+          {p.type === 'trampoline' && (
             <group>
-              <mesh position={[0, 0.18, 0]}>
-                <cylinderGeometry args={[1.0, 1.0, 0.34, 20]} />
-                <meshStandardMaterial color="#e53935" />
+              {/* Springy legs */}
+              {[
+                [-0.6, -0.6],
+                [0.6, -0.6],
+                [-0.6, 0.6],
+                [0.6, 0.6],
+              ].map(([x, z], i) => (
+                <mesh key={i} position={[x, 0.25, z]}>
+                  <cylinderGeometry args={[0.08, 0.08, 0.5, 8]} />
+                  <meshStandardMaterial color="#9e9e9e" metalness={0.6} roughness={0.3} />
+                </mesh>
+              ))}
+              {/* Dark round frame */}
+              <mesh position={[0, 0.5, 0]}>
+                <cylinderGeometry args={[1.0, 1.0, 0.16, 24]} />
+                <meshStandardMaterial color="#37474f" />
               </mesh>
-              <mesh position={[0, 0.4, 0]}>
-                <cylinderGeometry args={[0.7, 0.7, 0.16, 20]} />
-                <meshStandardMaterial color="#ffffff" />
+              {/* Bouncy blue mat */}
+              <mesh position={[0, 0.59, 0]}>
+                <cylinderGeometry args={[0.82, 0.82, 0.08, 24]} />
+                <meshStandardMaterial color="#26c6da" emissive="#0097a7" emissiveIntensity={0.3} />
               </mesh>
+              {/* Up arrows to signal "bounce" */}
+              {[0.9, 1.5].map((y, i) => (
+                <mesh key={i} position={[0, y, 0]} rotation={[0, 0, 0]}>
+                  <coneGeometry args={[0.32 - i * 0.08, 0.4, 12]} />
+                  <meshStandardMaterial color="#00e5ff" emissive="#00b8d4" emissiveIntensity={0.6} />
+                </mesh>
+              ))}
             </group>
           )}
 
           {p.type === 'gap' &&
             [-p.length / 2, p.length / 2].map((z, i) => (
               <mesh key={i} position={[0, 0.14, z]}>
-                <boxGeometry args={[TRACK_WIDTH, 0.28, 0.4]} />
+                <boxGeometry args={[LANE_WIDTH, 0.28, 0.4]} />
                 <meshStandardMaterial color="#ffca28" emissive="#ff6f00" emissiveIntensity={0.3} />
               </mesh>
             ))}
