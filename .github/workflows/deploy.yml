@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/web-app-3d-models-mu0xbm
   workflow_dispatch:
 
 permissions:

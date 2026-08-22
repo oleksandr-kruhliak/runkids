@@ -1,222 +1,149 @@
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Environment, Grid, Html } from '@react-three/drei'
-import Model, { formatFromUrl, type ModelFormat } from './Model'
+import { OrbitControls, Grid } from '@react-three/drei'
+import * as THREE from 'three'
+import { PIECE_ORDER, PIECE_META, Piece, PieceType, makePiece } from './track/pieces'
+import { buildTrack } from './track/build'
+import Riders from './track/Riders'
+import './styles.css'
 
-interface ModelEntry {
-  name: string
-  url: string
-  format: ModelFormat
-  /** Object URL created from a dropped/picked file — revoke when replaced. */
-  objectUrl?: boolean
-}
-
-interface ManifestItem {
-  name: string
-  file: string
-}
-
-const ACCEPTED = '.glb,.gltf,.obj,.stl,.fbx'
-
-function Loading() {
-  return (
-    <Html center>
-      <div className="loading">Loading model…</div>
-    </Html>
-  )
-}
+const DEFAULT_TRACK: PieceType[] = [
+  'straight',
+  'right',
+  'straight',
+  'rampUp',
+  'rampDown',
+  'right',
+  'straight',
+  'left',
+  'straight',
+]
 
 export default function App() {
-  const [builtIns, setBuiltIns] = useState<ModelEntry[]>([])
-  const [userModels, setUserModels] = useState<ModelEntry[]>([])
-  const [selected, setSelected] = useState<ModelEntry | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [dragging, setDragging] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pieces, setPieces] = useState<Piece[]>(() => DEFAULT_TRACK.map(makePiece))
+  const [playing, setPlaying] = useState(false)
 
-  // Load the built-in model manifest, if present.
+  const track = useMemo(() => buildTrack(pieces), [pieces])
+
+  // Dispose old geometry when the track changes.
   useEffect(() => {
-    fetch('/models/manifest.json')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((items: ManifestItem[]) => {
-        const entries = items
-          .map((it) => {
-            const url = `/models/${it.file}`
-            const format = formatFromUrl(url)
-            return format ? { name: it.name, url, format } : null
-          })
-          .filter(Boolean) as ModelEntry[]
-        setBuiltIns(entries)
-        if (entries.length > 0) setSelected((cur) => cur ?? entries[0])
-      })
-      .catch(() => setBuiltIns([]))
-  }, [])
+    const geo = track.geometry
+    return () => geo.dispose()
+  }, [track])
 
-  const addFiles = useCallback((files: FileList | File[]) => {
-    const next: ModelEntry[] = []
-    for (const file of Array.from(files)) {
-      const format = formatFromUrl(file.name)
-      if (!format) {
-        setError(`Unsupported file: ${file.name}. Use ${ACCEPTED}.`)
-        continue
-      }
-      next.push({
-        name: file.name,
-        url: URL.createObjectURL(file),
-        format,
-        objectUrl: true,
-      })
-    }
-    if (next.length > 0) {
-      setError(null)
-      setUserModels((prev) => [...next, ...prev])
-      setSelected(next[0])
-    }
-  }, [])
+  const add = (type: PieceType) => setPieces((p) => [...p, makePiece(type)])
+  const undo = () => setPieces((p) => p.slice(0, -1))
+  const clear = () => {
+    setPieces([])
+    setPlaying(false)
+  }
 
-  const onDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      setDragging(false)
-      if (e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files)
-    },
-    [addFiles],
-  )
-
-  const allModels = useMemo(() => [...userModels, ...builtIns], [userModels, builtIns])
+  const startPoint = track.points[0] ?? new THREE.Vector3()
 
   return (
-    <div
-      className="app"
-      onDragOver={(e) => {
-        e.preventDefault()
-        setDragging(true)
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={onDrop}
-    >
-      <aside className="sidebar">
-        <header className="brand">
-          <span className="logo">◆</span>
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="logo">🏁</span>
           <div>
             <h1>Runkids</h1>
-            <p>3D Model Viewer</p>
+            <p>Track Builder</p>
           </div>
-        </header>
+        </div>
+        <div className="counts">{pieces.length} pieces</div>
+      </header>
 
-        <button className="upload-btn" onClick={() => fileInputRef.current?.click()}>
-          + Open model file
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept={ACCEPTED}
-          multiple
-          hidden
-          onChange={(e) => e.target.files && addFiles(e.target.files)}
-        />
-
-        {error && <p className="error">{error}</p>}
-
-        <nav className="model-list">
-          {allModels.length === 0 && (
-            <p className="empty">
-              No models yet. Drag a <code>.glb</code>, <code>.gltf</code>, <code>.obj</code>,{' '}
-              <code>.stl</code>, or <code>.fbx</code> file anywhere, or click “Open model file”.
-            </p>
-          )}
-          {userModels.length > 0 && <p className="group-label">Your files</p>}
-          {userModels.map((m) => (
-            <ModelButton key={m.url} model={m} selected={selected} onSelect={setSelected} />
-          ))}
-          {builtIns.length > 0 && <p className="group-label">Included</p>}
-          {builtIns.map((m) => (
-            <ModelButton key={m.url} model={m} selected={selected} onSelect={setSelected} />
-          ))}
-        </nav>
-
-        <footer className="hints">
-          <p>Drag to orbit · scroll to zoom · right-drag to pan</p>
-        </footer>
-      </aside>
-
-      <main className="stage">
-        {dragging && <div className="drop-overlay">Drop model to view</div>}
-        <Canvas shadows camera={{ position: [3, 2, 4], fov: 50 }} dpr={[1, 2]}>
-          <color attach="background" args={['#12151c']} />
-          <ambientLight intensity={0.4} />
+      <div className="stage">
+        <Canvas shadows camera={{ position: [14, 12, 18], fov: 50 }} dpr={[1, 2]}>
+          <color attach="background" args={['#dfeffb']} />
+          <fog attach="fog" args={['#dfeffb', 40, 120]} />
+          <hemisphereLight args={['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
-            position={[5, 8, 5]}
-            intensity={1.2}
+            position={[12, 20, 8]}
+            intensity={1.5}
             castShadow
             shadow-mapSize={[2048, 2048]}
+            shadow-camera-left={-40}
+            shadow-camera-right={40}
+            shadow-camera-top={40}
+            shadow-camera-bottom={-40}
           />
-          <Suspense fallback={<Loading />}>
-            {selected && (
-              <ErrorReset key={selected.url}>
-                <Model url={selected.url} format={selected.format} />
-                <Environment preset="city" />
-              </ErrorReset>
-            )}
-          </Suspense>
+
+          {/* Ground */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+            <planeGeometry args={[400, 400]} />
+            <meshStandardMaterial color="#a5d6a7" />
+          </mesh>
           <Grid
-            args={[20, 20]}
-            cellColor="#2a2f3a"
-            sectionColor="#3a4152"
-            fadeDistance={30}
-            infiniteGrid
-            position={[0, -1.001, 0]}
+            args={[400, 400]}
+            cellSize={2}
+            cellColor="#8bc48f"
+            sectionSize={10}
+            sectionColor="#6aa870"
+            fadeDistance={90}
+            position={[0, 0, 0]}
           />
-          <OrbitControls makeDefault enableDamping />
+
+          {/* Track */}
+          {track.points.length > 1 && (
+            <mesh geometry={track.geometry} castShadow receiveShadow>
+              <meshStandardMaterial color="#ff7a1a" side={THREE.DoubleSide} flatShading />
+            </mesh>
+          )}
+
+          {/* Start / finish gate */}
+          {track.points.length > 1 && (
+            <group position={[startPoint.x, startPoint.y, startPoint.z]}>
+              <mesh position={[-1.7, 1.1, 0]} castShadow>
+                <boxGeometry args={[0.25, 2.2, 0.25]} />
+                <meshStandardMaterial color="#ffffff" />
+              </mesh>
+              <mesh position={[1.7, 1.1, 0]} castShadow>
+                <boxGeometry args={[0.25, 2.2, 0.25]} />
+                <meshStandardMaterial color="#ffffff" />
+              </mesh>
+              <mesh position={[0, 2.3, 0]} castShadow>
+                <boxGeometry args={[3.9, 0.4, 0.25]} />
+                <meshStandardMaterial color="#e53935" />
+              </mesh>
+            </group>
+          )}
+
+          {track.length > 0 && <Riders track={track} playing={playing} count={4} />}
+
+          <OrbitControls makeDefault enableDamping target={[0, 1, 6]} maxPolarAngle={Math.PI / 2.05} />
         </Canvas>
 
-        {!selected && (
-          <div className="placeholder">
-            <div className="placeholder-inner">
-              <div className="placeholder-icon">◆</div>
-              <p>Select or drop a 3D model to get started</p>
-            </div>
-          </div>
+        {pieces.length === 0 && (
+          <div className="hint-overlay">Tap a track piece below to start building</div>
         )}
-      </main>
+      </div>
+
+      <div className="toolbar">
+        <div className="pieces">
+          {PIECE_ORDER.map((type) => (
+            <button key={type} className={`piece-btn ${type}`} onClick={() => add(type)}>
+              <span className="piece-icon">{PIECE_META[type].icon}</span>
+              <span className="piece-label">{PIECE_META[type].label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="actions">
+          <button className="action" onClick={undo} disabled={pieces.length === 0}>
+            ↶ Undo
+          </button>
+          <button className="action" onClick={clear} disabled={pieces.length === 0}>
+            ✕ Clear
+          </button>
+          <button
+            className={`action play ${playing ? 'on' : ''}`}
+            onClick={() => setPlaying((p) => !p)}
+            disabled={track.length === 0}
+          >
+            {playing ? '■ Stop' : '▶ Play'}
+          </button>
+        </div>
+      </div>
     </div>
   )
-}
-
-function ModelButton({
-  model,
-  selected,
-  onSelect,
-}: {
-  model: ModelEntry
-  selected: ModelEntry | null
-  onSelect: (m: ModelEntry) => void
-}) {
-  return (
-    <button
-      className={`model-item ${selected?.url === model.url ? 'active' : ''}`}
-      onClick={() => onSelect(model)}
-    >
-      <span className="badge">{model.format}</span>
-      <span className="model-name">{model.name}</span>
-    </button>
-  )
-}
-
-/** Small boundary so a failed load doesn't blank the whole canvas. */
-class ErrorReset extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false }
-  static getDerivedStateFromError() {
-    return { failed: true }
-  }
-  render() {
-    if (this.state.failed) {
-      return (
-        <Html center>
-          <div className="loading error-load">Couldn’t load this model.</div>
-        </Html>
-      )
-    }
-    return this.props.children
-  }
 }
