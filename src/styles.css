@@ -173,6 +173,63 @@ body {
   border-color: var(--lane-color, #fff);
 }
 
+.cam-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  padding: 8px;
+  background: rgba(20, 26, 34, 0.7);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+
+.cam-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cam-label {
+  color: #cfd6e0;
+  font-size: 11px;
+  font-weight: 600;
+  width: 44px;
+  text-align: right;
+}
+
+.cam-btn {
+  width: 38px;
+  height: 38px;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cam-btn:active {
+  background: var(--accent);
+}
+
+.cam-btn.reset {
+  width: auto;
+  padding: 0 12px;
+  height: 30px;
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .hint-overlay {
   position: absolute;
   left: 50%;

@@ -3,12 +3,19 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { LeadState } from './Riders'
 
+export interface FollowCam {
+  dist: number // distance from the animal
+  azim: number // orbit angle around it (0 = in front)
+  elev: number // elevation angle (height)
+}
+
 interface CameraRigProps {
   center: THREE.Vector3
   radius: number
   follow: boolean
   fitSignal: number
   leadRef: MutableRefObject<LeadState>
+  camCtrlRef: MutableRefObject<FollowCam>
 }
 
 const ISO_DIR = new THREE.Vector3(0.9, 0.75, 1).normalize()
@@ -16,7 +23,14 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0)
 
 type OrbitLike = { target: THREE.Vector3; update: () => void } | null
 
-export default function CameraRig({ center, radius, follow, fitSignal, leadRef }: CameraRigProps) {
+export default function CameraRig({
+  center,
+  radius,
+  follow,
+  fitSignal,
+  leadRef,
+  camCtrlRef,
+}: CameraRigProps) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
 
   const centerRef = useRef(center)
@@ -38,13 +52,18 @@ export default function CameraRig({ center, radius, follow, fitSignal, leadRef }
 
     if (follow && leadRef.current.active) {
       const lead = leadRef.current
-      // In front of the animal, looking back at it: the camera leads and we
-      // see the animal's face as it runs toward us (3/4 front view).
+      const { dist, azim, elev } = camCtrlRef.current
+      // Orbit around the animal by azimuth (0 = in front) and elevation, at the
+      // chosen distance. Looking back at the animal shows its face.
+      const horiz = dist * Math.cos(elev)
+      const vert = dist * Math.sin(elev)
+      const cx = Math.cos(azim)
+      const sx = Math.sin(azim)
       desired.current
         .copy(lead.pos)
-        .addScaledVector(lead.tangent, 3.2)
-        .addScaledVector(lead.right, 1.2)
-        .addScaledVector(WORLD_UP, 1.5)
+        .addScaledVector(lead.tangent, cx * horiz)
+        .addScaledVector(lead.right, sx * horiz)
+        .addScaledVector(WORLD_UP, vert)
       camera.position.lerp(desired.current, 0.14)
       look.current.copy(lead.pos).addScaledVector(WORLD_UP, 0.45)
       camera.lookAt(look.current)

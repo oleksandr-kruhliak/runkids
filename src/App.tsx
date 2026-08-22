@@ -7,7 +7,7 @@ import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from '.
 import { ANIMAL_PALETTES } from './track/Animal'
 import Riders, { LeadState } from './track/Riders'
 import Obstacles from './track/Obstacles'
-import CameraRig from './track/CameraRig'
+import CameraRig, { FollowCam } from './track/CameraRig'
 import './styles.css'
 
 interface Action {
@@ -18,6 +18,49 @@ interface Action {
 }
 
 const LANE_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
+
+const DEFAULT_CAM: FollowCam = { dist: 3.7, azim: 0.35, elev: 0.4 }
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
+
+/** A button that repeats its action while held down (touch-friendly). */
+function HoldButton({
+  onStep,
+  className,
+  children,
+  ariaLabel,
+}: {
+  onStep: () => void
+  className?: string
+  children: React.ReactNode
+  ariaLabel: string
+}) {
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const stop = () => {
+    if (timer.current) {
+      clearInterval(timer.current)
+      timer.current = null
+    }
+  }
+  const start = (e: React.PointerEvent) => {
+    e.preventDefault()
+    onStep()
+    stop()
+    timer.current = setInterval(onStep, 55)
+  }
+  useEffect(() => stop, [])
+  return (
+    <button
+      className={className}
+      aria-label={ariaLabel}
+      onPointerDown={start}
+      onPointerUp={stop}
+      onPointerLeave={stop}
+      onPointerCancel={stop}
+    >
+      {children}
+    </button>
+  )
+}
 
 let actionId = 0
 const mk = (kind: 'shape' | 'obstacle', pt: PieceType, lane?: number): Action => ({
@@ -90,6 +133,13 @@ export default function App() {
     right: new THREE.Vector3(1, 0, 0),
   })
   const distancesRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  const camCtrlRef = useRef<FollowCam>({ ...DEFAULT_CAM })
+
+  const cam = camCtrlRef.current
+  const camZoom = (d: number) => () => (cam.dist = clamp(cam.dist + d, 1.6, 14))
+  const camRotate = (d: number) => () => (cam.azim += d)
+  const camTilt = (d: number) => () => (cam.elev = clamp(cam.elev + d, -0.1, 1.35))
+  const camReset = () => Object.assign(cam, DEFAULT_CAM)
 
   useEffect(() => {
     const lanes = track.lanes
@@ -218,6 +268,7 @@ export default function App() {
             follow={follow}
             fitSignal={fitSignal}
             leadRef={leadRef}
+            camCtrlRef={camCtrlRef}
           />
           <OrbitControls makeDefault enabled={!follow} enableDamping maxPolarAngle={Math.PI / 2.05} />
         </Canvas>
@@ -246,6 +297,41 @@ export default function App() {
                 {LANE_NAMES[l]}
               </button>
             ))}
+          </div>
+        )}
+
+        {follow && (
+          <div className="cam-controls">
+            <div className="cam-group">
+              <span className="cam-label">Zoom</span>
+              <HoldButton className="cam-btn" ariaLabel="Zoom in" onStep={camZoom(-0.18)}>
+                ＋
+              </HoldButton>
+              <HoldButton className="cam-btn" ariaLabel="Zoom out" onStep={camZoom(0.18)}>
+                －
+              </HoldButton>
+            </div>
+            <div className="cam-group">
+              <span className="cam-label">Rotate</span>
+              <HoldButton className="cam-btn" ariaLabel="Rotate left" onStep={camRotate(-0.05)}>
+                ↺
+              </HoldButton>
+              <HoldButton className="cam-btn" ariaLabel="Rotate right" onStep={camRotate(0.05)}>
+                ↻
+              </HoldButton>
+            </div>
+            <div className="cam-group">
+              <span className="cam-label">Tilt</span>
+              <HoldButton className="cam-btn" ariaLabel="Tilt up" onStep={camTilt(0.035)}>
+                ▲
+              </HoldButton>
+              <HoldButton className="cam-btn" ariaLabel="Tilt down" onStep={camTilt(-0.035)}>
+                ▼
+              </HoldButton>
+            </div>
+            <button className="cam-btn reset" aria-label="Reset camera" onClick={camReset}>
+              ⟳
+            </button>
           </div>
         )}
       </div>
