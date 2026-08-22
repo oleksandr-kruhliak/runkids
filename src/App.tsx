@@ -8,6 +8,7 @@ import { ANIMAL_PALETTES } from './track/Animal'
 import Riders, { LeadState } from './track/Riders'
 import Obstacles from './track/Obstacles'
 import StoneRoad from './track/StoneRoad'
+import GrassField from './track/GrassField'
 import CameraRig, { FollowCam } from './track/CameraRig'
 import './styles.css'
 
@@ -259,6 +260,7 @@ export default function App() {
             fadeDistance={180}
           />
 
+          <GrassField track={track} />
           <StoneRoad track={track} />
 
           <Obstacles placements={track.placements} distancesRef={distancesRef} length={track.length} />
