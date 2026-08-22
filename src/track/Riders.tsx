@@ -1,4 +1,4 @@
-import { MutableRefObject, useMemo, useRef } from 'react'
+import { Component, MutableRefObject, ReactNode, Suspense, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
@@ -14,6 +14,18 @@ import {
   stopperUp,
 } from './build'
 import Animal, { ANIMAL_PALETTES } from './Animal'
+import Animal3D from './Animal3D'
+
+/** Falls back to its `fallback` if the 3D model fails to load. */
+class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
 
 export interface LeadState {
   active: boolean
@@ -31,6 +43,11 @@ interface RidersProps {
   followTarget: number
   /** Per-lane current lap distance, published for obstacle hit detection. */
   distancesRef: MutableRefObject<number[]>
+  /** When true and models are provided, ride real .glb animals. */
+  use3d: boolean
+  animalUrls: string[]
+  /** Yaw offset to face 3D models forward along the track. */
+  faceY: number
 }
 
 const BASE_SPEED = 8
@@ -38,7 +55,16 @@ const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
 const KNOCK_SPEED = 7 // how fast the hammer flings the animal
 const KNOCK_DUR = 0.8 // how long the knock lasts after a hit (seconds)
 
-export default function Riders({ track, playing, leadRef, followTarget, distancesRef }: RidersProps) {
+export default function Riders({
+  track,
+  playing,
+  leadRef,
+  followTarget,
+  distancesRef,
+  use3d,
+  animalUrls,
+  faceY,
+}: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
   // Active hammer-knock impulse per lane: until when, and which direction.
@@ -139,17 +165,29 @@ export default function Riders({ track, playing, leadRef, followTarget, distance
 
   return (
     <>
-      {Array.from({ length: NUM_LANES }, (_, l) => (
-        <group
-          key={l}
-          ref={(el) => {
-            groupRefs.current[l] = el
-          }}
-          scale={0.82}
-        >
-          <Animal colors={ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]} />
-        </group>
-      ))}
+      {Array.from({ length: NUM_LANES }, (_, l) => {
+        const primitive = <Animal colors={ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]} />
+        const use = use3d && animalUrls.length > 0
+        return (
+          <group
+            key={l}
+            ref={(el) => {
+              groupRefs.current[l] = el
+            }}
+            scale={0.82}
+          >
+            {use ? (
+              <ModelBoundary fallback={primitive}>
+                <Suspense fallback={null}>
+                  <Animal3D url={animalUrls[l % animalUrls.length]} faceY={faceY} />
+                </Suspense>
+              </ModelBoundary>
+            ) : (
+              primitive
+            )}
+          </group>
+        )
+      })}
     </>
   )
 }
