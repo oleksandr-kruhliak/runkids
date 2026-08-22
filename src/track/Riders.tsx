@@ -35,11 +35,15 @@ interface RidersProps {
 
 const BASE_SPEED = 8
 const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
-const SPIN_KNOCKBACK = 9 // reverse speed while a spinner arm is over the animal
+const KNOCK_SPEED = 7 // how fast the hammer flings the animal
+const KNOCK_DUR = 0.8 // how long the knock lasts after a hit (seconds)
 
 export default function Riders({ track, playing, leadRef, followTarget, distancesRef }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  // Active hammer-knock impulse per lane: until when, and which direction.
+  const knockUntil = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  const knockDir = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
 
   const m = useMemo(() => new THREE.Matrix4(), [])
   const q = useMemo(() => new THREE.Quaternion(), [])
@@ -64,10 +68,10 @@ export default function Riders({ track, playing, leadRef, followTarget, distance
         let lap = len > 0 ? dist.current[l] % len : dist.current[l]
         if (lap < 0) lap += len
 
-        // Timed obstacles: hold at a raised stopper; get knocked by a spinning
-        // hammer in the direction it swings (hit front -> back, back -> forward).
+        // Timed obstacles: hold at a raised stopper; a spinning hammer hit
+        // launches a lasting impulse in its swing direction (front -> back,
+        // back -> forward).
         let hold = false
-        let spinKnock = 0
         for (const o of lane.obstacles) {
           if (o.type === 'stopper' && stopperUp(o.dist, t)) {
             let ahead = o.dist - lap
@@ -75,14 +79,15 @@ export default function Riders({ track, playing, leadRef, followTarget, distance
             if (ahead < STOP_HOLD_AHEAD) hold = true
           } else if (o.type === 'spinner' && spinnerHit(o.dist, t)) {
             if (lap >= o.start && lap <= o.end) {
-              spinKnock = SPIN_KNOCKBACK * spinnerSwingSign(o.dist, t)
+              knockUntil.current[l] = t + KNOCK_DUR
+              knockDir.current[l] = spinnerSwingSign(o.dist, t)
             }
           }
         }
 
         let v = BASE_SPEED * speedMultiplier(effect.type)
         if (hold) v = 0
-        else if (spinKnock !== 0) v = spinKnock
+        else if (t < knockUntil.current[l]) v = KNOCK_SPEED * knockDir.current[l]
         dist.current[l] += v * dt
         if (dist.current[l] < 0) dist.current[l] += len
       }
