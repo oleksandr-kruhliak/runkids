@@ -9,6 +9,8 @@ import {
   laneEffect,
   sampleCenter,
   speedMultiplier,
+  spinnerHit,
+  stopperUp,
 } from './build'
 import Animal, { ANIMAL_PALETTES } from './Animal'
 
@@ -28,6 +30,8 @@ interface RidersProps {
 }
 
 const BASE_SPEED = 8
+const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
+const SPIN_KNOCKBACK = 5 // reverse speed while a spinner arm is over the animal
 
 export default function Riders({ track, playing, leadRef, followTarget }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
@@ -38,8 +42,9 @@ export default function Riders({ track, playing, leadRef, followTarget }: Riders
   const xAxis = useMemo(() => new THREE.Vector3(), [])
   const yAxis = useMemo(() => new THREE.Vector3(), [])
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
+    const t = state.clock.elapsedTime
     const len = track.length
     let leadIdx = 0
     let leadDist = -Infinity
@@ -50,7 +55,31 @@ export default function Riders({ track, playing, leadRef, followTarget }: Riders
       if (!g || !lane) continue
 
       const effect = laneEffect(lane, dist.current[l], len)
-      if (playing) dist.current[l] += BASE_SPEED * speedMultiplier(effect.type) * dt
+
+      if (playing) {
+        let lap = len > 0 ? dist.current[l] % len : dist.current[l]
+        if (lap < 0) lap += len
+
+        // Timed obstacles: hold at a raised stopper; get knocked back by a
+        // spinner arm sweeping across.
+        let hold = false
+        let knockback = false
+        for (const o of lane.obstacles) {
+          if (o.type === 'stopper' && stopperUp(o.dist, t)) {
+            let ahead = o.dist - lap
+            if (ahead < 0) ahead += len
+            if (ahead < STOP_HOLD_AHEAD) hold = true
+          } else if (o.type === 'spinner' && spinnerHit(o.dist, t)) {
+            if (lap >= o.start && lap <= o.end) knockback = true
+          }
+        }
+
+        let v = BASE_SPEED * speedMultiplier(effect.type)
+        if (hold) v = 0
+        else if (knockback) v = -SPIN_KNOCKBACK
+        dist.current[l] += v * dt
+        if (dist.current[l] < 0) dist.current[l] += len
+      }
 
       const f = sampleCenter(track.center, dist.current[l])
       g.position

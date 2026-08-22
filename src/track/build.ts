@@ -59,6 +59,34 @@ export interface ObstaclePlacement {
   position: [number, number, number]
   quaternion: [number, number, number, number]
   length: number
+  phase: number
+}
+
+// --- Timed obstacle behavior (shared by visuals and rider logic) ---
+export const STOPPER_UP = 3 // seconds raised (blocking)
+export const STOPPER_DOWN = 3 // seconds lowered (clear)
+export const SPINNER_SPEED = 2.2 // rad/s
+export const SPINNER_WINDOW = 0.55 // rad half-window where the arm covers the lane
+
+/** Is a stopper (identified by its phase) currently raised? */
+export function stopperUp(phase: number, t: number): boolean {
+  const period = STOPPER_UP + STOPPER_DOWN
+  let p = (t + phase) % period
+  if (p < 0) p += period
+  return p < STOPPER_UP
+}
+
+/** Current rotation angle of a spinner arm. */
+export function spinnerAngle(phase: number, t: number): number {
+  return SPINNER_SPEED * t + phase
+}
+
+/** Is a spinner arm currently sweeping across the lane (hitting)? */
+export function spinnerHit(phase: number, t: number): boolean {
+  let a = spinnerAngle(phase, t) % (2 * Math.PI)
+  if (a < 0) a += 2 * Math.PI
+  if (a > Math.PI) a -= 2 * Math.PI
+  return Math.abs(a) < SPINNER_WINDOW
 }
 
 export interface Track {
@@ -292,6 +320,8 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
         position: [p.x, p.y, p.z],
         quaternion: frameQuaternion(f),
         length: o.len,
+        // Desync timed obstacles by seeding phase from position.
+        phase: o.type === 'stopper' || o.type === 'spinner' ? o.dist : 0,
       })
     }
   }

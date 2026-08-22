@@ -1,34 +1,70 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { LANE_WIDTH, ObstaclePlacement } from './build'
+import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
 
 const W = LANE_WIDTH - 0.2
 
-/** A spinning "wheeling stick" bar on a post. */
-function Spinner() {
-  const bar = useRef<THREE.Group>(null)
-  useFrame((_, delta) => {
-    if (bar.current) bar.current.rotation.y += delta * 2.6
+/**
+ * A "wheeling stick": a post at the lane edge with an arm that sweeps across
+ * the road. Its rotation is synced to the same clock the rider logic reads,
+ * so the animal is knocked back exactly when the arm passes over it.
+ */
+function Spinner({ phase }: { phase: number }) {
+  const arm = useRef<THREE.Group>(null)
+  useFrame((state) => {
+    if (arm.current) arm.current.rotation.y = spinnerAngle(phase, state.clock.elapsedTime)
   })
+  const edgeX = LANE_WIDTH / 2 + 0.25
+  const armLen = LANE_WIDTH + 0.6
   return (
     <group>
-      <mesh position={[0, 0.55, 0]}>
-        <cylinderGeometry args={[0.11, 0.13, 1.1, 10]} />
+      {/* Post at the side of the lane */}
+      <mesh position={[edgeX, 0.55, 0]}>
+        <cylinderGeometry args={[0.12, 0.15, 1.1, 12]} />
         <meshStandardMaterial color="#455a64" metalness={0.4} roughness={0.5} />
       </mesh>
-      <group ref={bar} position={[0, 1.05, 0]}>
-        <mesh>
-          <boxGeometry args={[LANE_WIDTH * 1.5, 0.18, 0.18]} />
+      {/* Arm pivots at the post and reaches across the road */}
+      <group ref={arm} position={[edgeX, 0.95, 0]}>
+        <mesh position={[-armLen / 2, 0, 0]}>
+          <boxGeometry args={[armLen, 0.18, 0.18]} />
           <meshStandardMaterial color="#e53935" />
         </mesh>
-        {[-1, 1].map((s) => (
-          <mesh key={s} position={[s * LANE_WIDTH * 0.75, 0, 0]}>
-            <boxGeometry args={[0.28, 0.34, 0.34]} />
-            <meshStandardMaterial color="#ffca28" emissive="#ff8f00" emissiveIntensity={0.3} />
-          </mesh>
-        ))}
+        <mesh position={[-armLen + 0.15, 0, 0]}>
+          <boxGeometry args={[0.34, 0.36, 0.36]} />
+          <meshStandardMaterial color="#ffca28" emissive="#ff8f00" emissiveIntensity={0.4} />
+        </mesh>
       </group>
+    </group>
+  )
+}
+
+/** A boom barrier that rises from below the track, holds, then drops. */
+function Stopper({ phase }: { phase: number }) {
+  const g = useRef<THREE.Group>(null)
+  useFrame((state) => {
+    if (!g.current) return
+    const target = stopperUp(phase, state.clock.elapsedTime) ? 0 : -1.7
+    g.current.position.y += (target - g.current.position.y) * 0.18
+  })
+  return (
+    <group ref={g} position={[0, -1.7, 0]}>
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[s * (LANE_WIDTH / 2), 0.6, 0]}>
+          <boxGeometry args={[0.22, 1.2, 0.22]} />
+          <meshStandardMaterial color="#eceff1" />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.95, 0]}>
+        <boxGeometry args={[LANE_WIDTH, 0.34, 0.2]} />
+        <meshStandardMaterial color="#e53935" />
+      </mesh>
+      {[-0.55, 0, 0.55].map((x, i) => (
+        <mesh key={i} position={[x, 0.95, 0.11]}>
+          <boxGeometry args={[0.22, 0.34, 0.02]} />
+          <meshStandardMaterial color="#ffffff" />
+        </mesh>
+      ))}
     </group>
   )
 }
@@ -97,30 +133,9 @@ export default function Obstacles({ placements }: { placements: ObstaclePlacemen
             </group>
           )}
 
-          {p.type === 'stopper' && (
-            <group>
-              {/* Barrier posts */}
-              {[-1, 1].map((s) => (
-                <mesh key={s} position={[s * (LANE_WIDTH / 2), 0.6, 0]}>
-                  <boxGeometry args={[0.22, 1.2, 0.22]} />
-                  <meshStandardMaterial color="#eceff1" />
-                </mesh>
-              ))}
-              {/* Red boom bar with white stripes */}
-              <mesh position={[0, 0.95, 0]}>
-                <boxGeometry args={[LANE_WIDTH, 0.34, 0.2]} />
-                <meshStandardMaterial color="#e53935" />
-              </mesh>
-              {[-0.55, 0, 0.55].map((x, i) => (
-                <mesh key={i} position={[x, 0.95, 0.11]}>
-                  <boxGeometry args={[0.22, 0.34, 0.02]} />
-                  <meshStandardMaterial color="#ffffff" />
-                </mesh>
-              ))}
-            </group>
-          )}
+          {p.type === 'stopper' && <Stopper phase={p.phase} />}
 
-          {p.type === 'spinner' && <Spinner />}
+          {p.type === 'spinner' && <Spinner phase={p.phase} />}
 
           {p.type === 'gap' &&
             [-p.length / 2, p.length / 2].map((z, i) => (
