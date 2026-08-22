@@ -54,6 +54,8 @@ const BASE_SPEED = 8
 const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
 const KNOCK_SPEED = 7 // how fast the hammer flings the animal
 const KNOCK_DUR = 0.8 // how long the knock lasts after a hit (seconds)
+const MUD_SLOW = 0.25 // speed multiplier at full mud stickiness
+const MUD_LINGER = 0.9 // seconds mud keeps slowing the animal after it leaves
 
 export default function Riders({
   track,
@@ -70,6 +72,8 @@ export default function Riders({
   // Active hammer-knock impulse per lane: until when, and which direction.
   const knockUntil = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
   const knockDir = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  // Per-lane mud stickiness (1 while in mud, decays after leaving).
+  const mudStick = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
   // Per-lane current forward speed, so the 3D models can play a run/idle
   // animation that matches whether the animal is actually moving.
   const speedRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
@@ -114,7 +118,15 @@ export default function Riders({
           }
         }
 
+        // Mud sticks to the legs: full while in it, then decays, and keeps
+        // slowing the animal until it works free.
+        if (effect.type === 'mud') mudStick.current[l] = 1
+        else mudStick.current[l] = Math.max(0, mudStick.current[l] - dt / MUD_LINGER)
+
         let v = BASE_SPEED * speedMultiplier(effect.type)
+        if (effect.type !== 'mud' && mudStick.current[l] > 0) {
+          v *= THREE.MathUtils.lerp(1, MUD_SLOW, mudStick.current[l])
+        }
         if (hold) v = 0
         else if (t < knockUntil.current[l]) v = KNOCK_SPEED * knockDir.current[l]
         dist.current[l] += v * dt

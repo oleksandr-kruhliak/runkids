@@ -90,7 +90,7 @@ export const SPEED_MULT: Record<PieceType, number> = {
   loop: 1,
   gap: 1.25,
   water: 0.45,
-  mud: 0.4,
+  mud: 0.25,
   boost: 2.6,
   trampoline: 0.9,
   stopper: 1,
