@@ -10,6 +10,7 @@ import {
   sampleCenter,
   speedMultiplier,
   spinnerHit,
+  spinnerSwingSign,
   stopperUp,
 } from './build'
 import Animal, { ANIMAL_PALETTES } from './Animal'
@@ -63,23 +64,25 @@ export default function Riders({ track, playing, leadRef, followTarget, distance
         let lap = len > 0 ? dist.current[l] % len : dist.current[l]
         if (lap < 0) lap += len
 
-        // Timed obstacles: hold at a raised stopper; get knocked back by a
-        // spinner arm sweeping across.
+        // Timed obstacles: hold at a raised stopper; get knocked by a spinning
+        // hammer in the direction it swings (hit front -> back, back -> forward).
         let hold = false
-        let knockback = false
+        let spinKnock = 0
         for (const o of lane.obstacles) {
           if (o.type === 'stopper' && stopperUp(o.dist, t)) {
             let ahead = o.dist - lap
             if (ahead < 0) ahead += len
             if (ahead < STOP_HOLD_AHEAD) hold = true
           } else if (o.type === 'spinner' && spinnerHit(o.dist, t)) {
-            if (lap >= o.start && lap <= o.end) knockback = true
+            if (lap >= o.start && lap <= o.end) {
+              spinKnock = SPIN_KNOCKBACK * spinnerSwingSign(o.dist, t)
+            }
           }
         }
 
         let v = BASE_SPEED * speedMultiplier(effect.type)
         if (hold) v = 0
-        else if (knockback) v = -SPIN_KNOCKBACK
+        else if (spinKnock !== 0) v = spinKnock
         dist.current[l] += v * dt
         if (dist.current[l] < 0) dist.current[l] += len
       }

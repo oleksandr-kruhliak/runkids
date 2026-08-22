@@ -87,6 +87,15 @@ export function spinnerAngle(phase: number, t: number): number {
   return SPIN_AMP * Math.sin(SPIN_RATE * t + phase)
 }
 
+/**
+ * Direction the hammer head is sweeping along the track at time t: +1 means it
+ * moves forward (hits the animal's back → knocks it forward), -1 means it moves
+ * backward (hits the animal's front → knocks it back).
+ */
+export function spinnerSwingSign(phase: number, t: number): number {
+  return Math.cos(SPIN_RATE * t + phase) >= 0 ? 1 : -1
+}
+
 /** Is a spinner arm currently sweeping across the lane (hitting)? */
 export function spinnerHit(phase: number, t: number): boolean {
   let a = spinnerAngle(phase, t) % (2 * Math.PI)
