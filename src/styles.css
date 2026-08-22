@@ -118,6 +118,61 @@ body {
   touch-action: none;
 }
 
+.follow-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(20, 26, 34, 0.72);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.follow-label {
+  color: #cfd6e0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.follow-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 11px;
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.follow-chip .lane-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--lane-color);
+  flex-shrink: 0;
+}
+
+.follow-chip.active {
+  background: rgba(255, 255, 255, 0.95);
+  color: #1c2430;
+  border-color: var(--lane-color, #fff);
+}
+
 .hint-overlay {
   position: absolute;
   left: 50%;

@@ -23,11 +23,13 @@ interface RidersProps {
   track: Track
   playing: boolean
   leadRef: MutableRefObject<LeadState>
+  /** Which lane the follow-cam tracks; -1 = whichever animal is leading. */
+  followTarget: number
 }
 
 const BASE_SPEED = 8
 
-export default function Riders({ track, playing, leadRef }: RidersProps) {
+export default function Riders({ track, playing, leadRef, followTarget }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
 
@@ -72,13 +74,17 @@ export default function Riders({ track, playing, leadRef }: RidersProps) {
       }
     }
 
-    const leadLane = track.lanes[leadIdx]
-    if (leadLane) {
-      const f = sampleCenter(track.center, dist.current[leadIdx])
+    // Publish the animal the camera should follow: the chosen lane, or the
+    // current leader when followTarget is -1.
+    const followIdx =
+      followTarget >= 0 && followTarget < track.lanes.length ? followTarget : leadIdx
+    const followLane = track.lanes[followIdx]
+    if (followLane) {
+      const f = sampleCenter(track.center, dist.current[followIdx])
       leadRef.current.active = true
       leadRef.current.pos
         .copy(f.pos)
-        .addScaledVector(f.right, leadLane.offset)
+        .addScaledVector(f.right, followLane.offset)
         .addScaledVector(f.up, RIDE_OFFSET)
       leadRef.current.tangent.copy(f.tangent)
       leadRef.current.up.copy(f.up)

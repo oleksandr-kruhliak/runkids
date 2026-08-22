@@ -55,6 +55,7 @@ export default function App() {
   const [selectedLane, setSelectedLane] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [follow, setFollow] = useState(false)
+  const [followTarget, setFollowTarget] = useState(-1) // -1 = leader
   const [fitSignal, setFitSignal] = useState(0)
 
   const { shape, laneObstacles } = useMemo(() => {
@@ -186,7 +187,9 @@ export default function App() {
             </group>
           )}
 
-          {track.length > 0 && <Riders track={track} playing={playing} leadRef={leadRef} />}
+          {track.length > 0 && (
+            <Riders track={track} playing={playing} leadRef={leadRef} followTarget={followTarget} />
+          )}
 
           <CameraRig
             center={track.boundsCenter}
@@ -200,6 +203,29 @@ export default function App() {
 
         {shape.length === 0 && (
           <div className="hint-overlay">Tap a Track piece below to start building</div>
+        )}
+
+        {follow && (
+          <div className="follow-bar">
+            <span className="follow-label">Following</span>
+            <button
+              className={`follow-chip ${followTarget === -1 ? 'active' : ''}`}
+              onClick={() => setFollowTarget(-1)}
+            >
+              🏆 Leader
+            </button>
+            {Array.from({ length: NUM_LANES }, (_, l) => (
+              <button
+                key={l}
+                className={`follow-chip ${followTarget === l ? 'active' : ''}`}
+                style={{ ['--lane-color' as string]: ANIMAL_PALETTES[l].body }}
+                onClick={() => setFollowTarget(l)}
+              >
+                <span className="lane-dot" />
+                {LANE_NAMES[l]}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
