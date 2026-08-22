@@ -1,4 +1,4 @@
-import { Component, MutableRefObject, ReactNode, Suspense, useMemo, useRef } from 'react'
+import { Component, MutableRefObject, ReactNode, Suspense, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
@@ -37,7 +37,10 @@ export interface LeadState {
 
 interface RidersProps {
   track: Track
-  playing: boolean
+  /** Per-lane running flag: an animal moves only when its entry is true. */
+  running: boolean[]
+  /** Bumping this resets every animal back to the start line. */
+  resetSignal: number
   leadRef: MutableRefObject<LeadState>
   /** Which lane the follow-cam tracks; -1 = whichever animal is leading. */
   followTarget: number
@@ -59,7 +62,8 @@ const MUD_LINGER = 0.9 // seconds mud keeps slowing the animal after it leaves
 
 export default function Riders({
   track,
-  playing,
+  running,
+  resetSignal,
   leadRef,
   followTarget,
   distancesRef,
@@ -77,6 +81,18 @@ export default function Riders({
   // Per-lane current forward speed, so the 3D models can play a run/idle
   // animation that matches whether the animal is actually moving.
   const speedRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+
+  // Reset every animal back to the start line when asked.
+  useEffect(() => {
+    for (let l = 0; l < NUM_LANES; l++) {
+      dist.current[l] = 0
+      knockUntil.current[l] = 0
+      knockDir.current[l] = 0
+      mudStick.current[l] = 0
+      speedRef.current[l] = 0
+      distancesRef.current[l] = 0
+    }
+  }, [resetSignal, distancesRef])
 
   const m = useMemo(() => new THREE.Matrix4(), [])
   const q = useMemo(() => new THREE.Quaternion(), [])
@@ -97,7 +113,7 @@ export default function Riders({
 
       const effect = laneEffect(lane, dist.current[l], len)
 
-      if (playing) {
+      if (running[l]) {
         let lap = len > 0 ? dist.current[l] % len : dist.current[l]
         if (lap < 0) lap += len
 
@@ -142,7 +158,7 @@ export default function Riders({
         .addScaledVector(f.right, lane.offset)
         .addScaledVector(f.up, RIDE_OFFSET)
       g.position.y += jumpOffset(effect.type, effect.u)
-      if (playing && effect.type !== 'gap' && effect.type !== 'trampoline') {
+      if (running[l] && effect.type !== 'gap' && effect.type !== 'trampoline') {
         g.position.y += Math.abs(Math.sin(dist.current[l] * 1.4)) * 0.06
       }
 

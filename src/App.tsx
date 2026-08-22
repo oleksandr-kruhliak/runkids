@@ -111,7 +111,8 @@ function defaultActions(): Action[] {
 export default function App() {
   const [actions, setActions] = useState<Action[]>(() => defaultActions())
   const [selectedLane, setSelectedLane] = useState(0)
-  const [playing, setPlaying] = useState(false)
+  const [running, setRunning] = useState<boolean[]>(() => Array(NUM_LANES).fill(false))
+  const [resetSignal, setResetSignal] = useState(0)
   const [follow, setFollow] = useState(false)
   const [followTarget, setFollowTarget] = useState(-1) // -1 = leader
   const [fitSignal, setFitSignal] = useState(0)
@@ -176,8 +177,18 @@ export default function App() {
   const undo = () => setActions((a) => a.slice(0, -1))
   const clear = () => {
     setActions([])
-    setPlaying(false)
+    setRunning(Array(NUM_LANES).fill(false))
+    setResetSignal((n) => n + 1)
     setFollow(false)
+  }
+
+  const anyRunning = running.some(Boolean)
+  const toggleLane = (l: number) => setRunning((r) => r.map((v, i) => (i === l ? !v : v)))
+  const startAll = () => setRunning(Array(NUM_LANES).fill(true))
+  const stopAll = () => setRunning(Array(NUM_LANES).fill(false))
+  const resetRace = () => {
+    setRunning(Array(NUM_LANES).fill(false))
+    setResetSignal((n) => n + 1)
   }
   const fit = () => {
     setFollow(false)
@@ -285,7 +296,8 @@ export default function App() {
           {track.length > 0 && (
             <Riders
               track={track}
-              playing={playing}
+              running={running}
+              resetSignal={resetSignal}
               leadRef={leadRef}
               followTarget={followTarget}
               distancesRef={distancesRef}
@@ -417,6 +429,24 @@ export default function App() {
           </div>
         </div>
 
+        <div className="palette-group">
+          <span className="group-title">Start racers (tap an animal to run / pause it)</span>
+          <div className="lanes">
+            {Array.from({ length: NUM_LANES }, (_, l) => (
+              <button
+                key={l}
+                className={`lane-chip start ${running[l] ? 'active' : ''}`}
+                style={{ ['--lane-color' as string]: ANIMAL_PALETTES[l].body }}
+                onClick={() => toggleLane(l)}
+                disabled={track.length === 0}
+              >
+                <span className="lane-dot" />
+                {running[l] ? '⏸' : '▶'} {LANE_NAMES[l]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="actions">
           <button className="action" onClick={undo} disabled={actions.length === 0}>
             ↶ Undo
@@ -427,12 +457,15 @@ export default function App() {
           <span className="action-count">
             {shape.length} shape · {obstacleCount} obs
           </span>
+          <button className="action" onClick={resetRace} disabled={track.length === 0}>
+            ⟲ Reset
+          </button>
           <button
-            className={`action play ${playing ? 'on' : ''}`}
-            onClick={() => setPlaying((p) => !p)}
+            className={`action play ${anyRunning ? 'on' : ''}`}
+            onClick={anyRunning ? stopAll : startAll}
             disabled={track.length === 0}
           >
-            {playing ? '■ Stop' : '▶ Race'}
+            {anyRunning ? '■ Stop all' : '▶ Race all'}
           </button>
         </div>
       </div>
