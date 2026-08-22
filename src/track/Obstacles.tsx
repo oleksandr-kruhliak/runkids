@@ -1,9 +1,49 @@
 import { MutableRefObject, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
+import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
 
 const W = LANE_WIDTH - 0.2
+
+const OCEAN_URL = `${import.meta.env.BASE_URL}models/track/ocean.glb`
+
+/**
+ * A pool of water using the Poly ocean tile: scaled to fill the lane
+ * (width x obstacle length) with its wave height kept small, sitting on the
+ * road surface, and gently bobbing so it reads as living water.
+ */
+function Water({ length }: { length: number }) {
+  const gltf = useGLTF(OCEAN_URL)
+  const group = useRef<THREE.Group>(null)
+
+  const object = useMemo(() => {
+    const clone = (gltf.scene as THREE.Object3D).clone(true)
+    const box = new THREE.Box3().setFromObject(clone)
+    const size = box.getSize(new THREE.Vector3())
+    const center = box.getCenter(new THREE.Vector3())
+    const sx = size.x || 1
+    const sz = size.z || 1
+    // Center horizontally, drop the troughs to y=0 (in raw units).
+    clone.position.set(-center.x, -box.min.y, -center.z)
+    const scaleXZ = W / sx
+    const g = new THREE.Group()
+    g.add(clone)
+    // Map raw X->lane width, raw Z->obstacle length; keep waves proportional.
+    g.scale.set(scaleXZ, scaleXZ, length / sz)
+    return g
+  }, [gltf.scene, length])
+
+  useFrame((state) => {
+    if (group.current) group.current.position.y = 0.02 + Math.sin(state.clock.elapsedTime * 1.6) * 0.03
+  })
+
+  return (
+    <group ref={group}>
+      <primitive object={object} />
+    </group>
+  )
+}
 
 /**
  * A low swinging hammer: a short post at the lane edge with a half-lane-length
@@ -189,18 +229,7 @@ export default function Obstacles({
     <>
       {placements.map((p) => (
         <group key={p.key} position={p.position} quaternion={p.quaternion}>
-          {p.type === 'water' && (
-            <mesh position={[0, 0.2, 0]}>
-              <boxGeometry args={[W, 0.4, p.length]} />
-              <meshStandardMaterial
-                color="#2196f3"
-                transparent
-                opacity={0.72}
-                metalness={0.2}
-                roughness={0.15}
-              />
-            </mesh>
-          )}
+          {p.type === 'water' && <Water length={p.length} />}
 
           {p.type === 'mud' && (
             <mesh position={[0, 0.07, 0]}>
@@ -267,3 +296,5 @@ export default function Obstacles({
     </>
   )
 }
+
+useGLTF.preload(OCEAN_URL)
