@@ -1,27 +1,34 @@
-import { useMemo, useRef } from 'react'
+import { MutableRefObject, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { RIDE_OFFSET, Track, sampleTrack } from './build'
+import { RIDE_OFFSET, Track, jumpOffset, sampleTrack, speedMultiplier } from './build'
 import Animal, { ANIMAL_PALETTES } from './Animal'
+
+export interface LeadState {
+  active: boolean
+  pos: THREE.Vector3
+  tangent: THREE.Vector3
+  up: THREE.Vector3
+}
 
 interface RidersProps {
   track: Track
   playing: boolean
   count: number
+  leadRef: MutableRefObject<LeadState>
 }
 
-const BASE_SPEED = 7 // world units / second
+const BASE_SPEED = 8 // world units / second
 
-export default function Riders({ track, playing, count }: RidersProps) {
+export default function Riders({ track, playing, count, leadRef }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
 
   const riders = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
         colors: ANIMAL_PALETTES[i % ANIMAL_PALETTES.length],
-        speed: BASE_SPEED * (0.85 + 0.12 * i),
-        // Space riders out along the track.
-        offset: i * 5,
+        speed: BASE_SPEED * (0.92 + 0.06 * i),
+        offset: i * 6,
       })),
     [count],
   )
@@ -38,30 +45,44 @@ export default function Riders({ track, playing, count }: RidersProps) {
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05)
+    let leadIdx = 0
+    let leadDist = -Infinity
+
     for (let i = 0; i < count; i++) {
       const g = groupRefs.current[i]
       if (!g) continue
-      if (playing) dist.current[i] += riders[i].speed * dt
 
       const s = sampleTrack(track, dist.current[i])
-      // Position the animal in the channel, lifted to ride height.
+      if (playing) dist.current[i] += riders[i].speed * speedMultiplier(s.type) * dt
+
+      // Base position in the channel, plus jump/spring/water offset.
       g.position.copy(s.pos).addScaledVector(s.up, RIDE_OFFSET)
+      g.position.y += jumpOffset(s.type, s.u)
+
+      // A little hop bounce while moving on solid track.
+      if (playing && s.type !== 'gap' && s.type !== 'spring') {
+        g.position.y += Math.abs(Math.sin(dist.current[i] * 1.4)) * 0.06
+      }
 
       // Orient: local +Z = tangent, local +Y = track up.
-      const z = s.tangent
-      const y = s.up
-      xAxis.crossVectors(y, z).normalize()
-      yAxis.crossVectors(z, xAxis).normalize()
-      m.makeBasis(xAxis, yAxis, z)
+      xAxis.crossVectors(s.up, s.tangent).normalize()
+      yAxis.crossVectors(s.tangent, xAxis).normalize()
+      m.makeBasis(xAxis, yAxis, s.tangent)
       q.setFromRotationMatrix(m)
       g.quaternion.copy(q)
 
-      // A little hop bounce while moving.
-      if (playing) {
-        const bob = Math.sin(dist.current[i] * 1.5) * 0.06
-        g.position.addScaledVector(s.up, bob)
+      if (dist.current[i] > leadDist) {
+        leadDist = dist.current[i]
+        leadIdx = i
       }
     }
+
+    // Publish the lead rider for the follow-cam.
+    const lead = sampleTrack(track, dist.current[leadIdx])
+    leadRef.current.active = true
+    leadRef.current.pos.copy(lead.pos).addScaledVector(lead.up, RIDE_OFFSET)
+    leadRef.current.tangent.copy(lead.tangent)
+    leadRef.current.up.copy(lead.up)
   })
 
   return (
