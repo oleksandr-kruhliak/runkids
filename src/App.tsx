@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Grid } from '@react-three/drei'
+import { OrbitControls, Grid, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { OBSTACLE_PIECES, SHAPE_PIECES, PIECE_META, PieceType } from './track/pieces'
 import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from './track/build'
@@ -113,6 +113,8 @@ export default function App() {
   const [follow, setFollow] = useState(false)
   const [followTarget, setFollowTarget] = useState(-1) // -1 = leader
   const [fitSignal, setFitSignal] = useState(0)
+  const [use3d, setUse3d] = useState(false)
+  const [animalModels, setAnimalModels] = useState<{ name: string; file: string }[]>([])
 
   const { shape, laneObstacles } = useMemo(() => {
     const shape = actions.filter((a) => a.kind === 'shape').map((a) => a.pt)
@@ -145,6 +147,26 @@ export default function App() {
     const lanes = track.lanes
     return () => lanes.forEach((l) => l.geometry.dispose())
   }, [track])
+
+  // Load the optional 3D animal model set (added under public/models/animals).
+  const base = import.meta.env.BASE_URL
+  useEffect(() => {
+    fetch(`${base}models/animals/manifest.json`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list: { name: string; file: string }[]) =>
+        setAnimalModels(Array.isArray(list) ? list : []),
+      )
+      .catch(() => setAnimalModels([]))
+  }, [base])
+
+  const animalUrls = useMemo(
+    () => animalModels.map((m) => `${base}models/animals/${m.file}`),
+    [animalModels, base],
+  )
+  useEffect(() => {
+    animalUrls.forEach((u) => useGLTF.preload(u))
+  }, [animalUrls])
+  const has3d = animalUrls.length > 0
 
   const obstacleCount = actions.filter((a) => a.kind === 'obstacle').length
   const addShape = (pt: PieceType) => setActions((a) => [...a, mk('shape', pt)])
@@ -185,6 +207,15 @@ export default function App() {
           </div>
         </div>
         <div className="topbar-right">
+          {has3d && (
+            <button
+              className={`mini ${use3d ? 'on' : ''}`}
+              onClick={() => setUse3d((v) => !v)}
+              title="Use the 3D animal models"
+            >
+              🐮 3D Animals
+            </button>
+          )}
           <button className="mini" onClick={fit} disabled={shape.length === 0}>
             ⤢ Fit
           </button>
@@ -259,6 +290,9 @@ export default function App() {
               leadRef={leadRef}
               followTarget={followTarget}
               distancesRef={distancesRef}
+              use3d={use3d && has3d}
+              animalUrls={animalUrls}
+              faceY={0}
             />
           )}
 

@@ -26,33 +26,13 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Fetch farm animal models
-        continue-on-error: true
+      - name: Build animal manifest
         run: |
-          set +e
           mkdir -p public/models/animals
-          # Read the download URL from the pointer file committed to the repo,
-          # falling back to the known pack URL.
-          URL=$(node -e "try{const fs=require('fs');const j=JSON.parse(fs.readFileSync('Farm Animal Pack-glb.zip','utf8'));process.stdout.write(j.url||'')}catch(e){process.stdout.write('')}")
-          [ -z "$URL" ] && URL="https://static.poly.pizza/list/1kUvRTPLzT-glb-1390282891.zip"
-          echo "Downloading pack: $URL"
-          curl -sSL "$URL" -o /tmp/pack.bin
-          # If we received a JSON pointer instead of a zip, follow it once.
-          if [ "$(head -c 1 /tmp/pack.bin)" = "{" ]; then
-            NEXT=$(node -e "try{const fs=require('fs');const j=JSON.parse(fs.readFileSync('/tmp/pack.bin','utf8'));process.stdout.write(j.url||'')}catch(e){process.stdout.write('')}")
-            echo "Pointer detected -> $NEXT"
-            [ -n "$NEXT" ] && curl -sSL "$NEXT" -o /tmp/pack.bin
-          fi
-          if unzip -tq /tmp/pack.bin >/dev/null 2>&1; then
-            rm -rf /tmp/animals && mkdir -p /tmp/animals
-            unzip -oq /tmp/pack.bin -d /tmp/animals
-            find /tmp/animals -iname '*.glb' -exec cp {} public/models/animals/ \;
-            node scripts/gen-animal-manifest.mjs
-          else
-            echo "::warning::Animal pack was not a valid zip; continuing without 3D animals"
-            echo "First bytes:"; head -c 120 /tmp/pack.bin | cat -v; echo
-            echo "[]" > public/models/animals/manifest.json
-          fi
+          # Any .glb files committed under public/models/animals become the
+          # 3D animal set. (Auto-downloading the poly.pizza pack isn't possible
+          # — that URL is behind Cloudflare bot protection.)
+          node scripts/gen-animal-manifest.mjs
       - run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
