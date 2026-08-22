@@ -6,17 +6,18 @@ import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
 const W = LANE_WIDTH - 0.2
 
 /**
- * A low "wheeling stick": a short post at the lane edge with an arm that sweeps
- * across the road near ground level. Rotation is synced to the rider logic, so
- * the animal is knocked back when the arm passes over it.
+ * A low swinging hammer: a short post at the lane edge with a half-lane-length
+ * handle and a heavy head that swings back and forth over the road (reversing
+ * direction). Rotation is synced to the rider logic, so the animal is knocked
+ * back when the hammer passes over it.
  */
 function Spinner({ phase }: { phase: number }) {
   const arm = useRef<THREE.Group>(null)
   useFrame((state) => {
     if (arm.current) arm.current.rotation.y = spinnerAngle(phase, state.clock.elapsedTime)
   })
-  const edgeX = LANE_WIDTH / 2 + 0.2
-  const armLen = LANE_WIDTH + 0.3 // reaches across the lane without overshooting
+  const edgeX = LANE_WIDTH / 2 + 0.05
+  const armLen = LANE_WIDTH / 2 // half the road width
   const armY = 0.42 // low, near the animals' body height
   return (
     <group>
@@ -25,17 +26,24 @@ function Spinner({ phase }: { phase: number }) {
         <cylinderGeometry args={[0.13, 0.16, 0.56, 12]} />
         <meshStandardMaterial color="#455a64" metalness={0.4} roughness={0.5} />
       </mesh>
-      {/* Arm pivots at the post and sweeps across the road, low down. The whole
-          bar is a hazard; the yellow marks its swinging tip. */}
+      {/* Hammer pivots at the post and swings across the road, low down */}
       <group ref={arm} position={[edgeX, armY, 0]}>
+        {/* Wooden handle */}
         <mesh position={[-armLen / 2, 0, 0]}>
-          <boxGeometry args={[armLen, 0.26, 0.26]} />
-          <meshStandardMaterial color="#e53935" emissive="#b71c1c" emissiveIntensity={0.25} />
+          <boxGeometry args={[armLen, 0.14, 0.14]} />
+          <meshStandardMaterial color="#9c6b3f" flatShading />
         </mesh>
-        <mesh position={[-armLen + 0.18, 0, 0]}>
-          <boxGeometry args={[0.44, 0.46, 0.46]} />
-          <meshStandardMaterial color="#ffca28" emissive="#ff8f00" emissiveIntensity={0.4} />
+        {/* Heavy metal head at the tip */}
+        <mesh position={[-armLen, 0, 0]}>
+          <boxGeometry args={[0.5, 0.56, 0.92]} />
+          <meshStandardMaterial color="#607d8b" metalness={0.5} roughness={0.4} />
         </mesh>
+        {[0.46, -0.46].map((z, i) => (
+          <mesh key={i} position={[-armLen, 0, z]}>
+            <boxGeometry args={[0.54, 0.6, 0.1]} />
+            <meshStandardMaterial color="#37474f" metalness={0.4} roughness={0.5} />
+          </mesh>
+        ))}
       </group>
     </group>
   )

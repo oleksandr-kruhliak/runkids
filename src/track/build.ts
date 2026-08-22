@@ -67,8 +67,9 @@ export interface ObstaclePlacement {
 // --- Timed obstacle behavior (shared by visuals and rider logic) ---
 export const STOPPER_UP = 3 // seconds raised (blocking)
 export const STOPPER_DOWN = 3 // seconds lowered (clear)
-export const SPINNER_SPEED = 2.0 // rad/s
-export const SPINNER_WINDOW = 1.15 // rad half-window where the arm sweeps over the lane
+export const SPIN_AMP = 4.0 // swing amplitude (rad) — the hammer swings ±this, reversing direction
+export const SPIN_RATE = 1.1 // swing rate
+export const SPINNER_WINDOW = 1.0 // rad half-window where the hammer is over the lane
 
 /** Is a stopper (identified by its phase) currently raised? */
 export function stopperUp(phase: number, t: number): boolean {
@@ -78,9 +79,12 @@ export function stopperUp(phase: number, t: number): boolean {
   return p < STOPPER_UP
 }
 
-/** Current rotation angle of a spinner arm. */
+/**
+ * Current rotation angle of a spinner hammer. It swings back and forth (a sine
+ * sweep), so its rotation direction reverses each half-swing.
+ */
 export function spinnerAngle(phase: number, t: number): number {
-  return SPINNER_SPEED * t + phase
+  return SPIN_AMP * Math.sin(SPIN_RATE * t + phase)
 }
 
 /** Is a spinner arm currently sweeping across the lane (hitting)? */
