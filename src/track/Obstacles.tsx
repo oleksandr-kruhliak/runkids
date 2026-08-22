@@ -65,11 +65,15 @@ function Water({ length }: { length: number }) {
     const sz = size.z || 1
     // Center horizontally, drop the troughs to y=0 (in raw units).
     clone.position.set(-center.x, -box.min.y, -center.z)
-    const scaleXZ = W / sx
+    // Fill the road hole cut for this water: full lane width, and a little
+    // longer than the obstacle so the tile covers the hole's edges.
+    const wWidth = LANE_WIDTH
+    const wLen = length + 1.1
+    const scaleXZ = wWidth / sx
     const g = new THREE.Group()
     g.add(clone)
-    // Map raw X->lane width, raw Z->obstacle length; keep waves proportional.
-    g.scale.set(scaleXZ, scaleXZ, length / sz)
+    // Map raw X->lane width, raw Z->hole length; keep waves proportional.
+    g.scale.set(scaleXZ, scaleXZ, wLen / sz)
     return g
   }, [gltf.scene, length])
 

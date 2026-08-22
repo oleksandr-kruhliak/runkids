@@ -125,14 +125,19 @@ export default function StoneRoad({ track }: { track: Track }) {
     const yAxis = new THREE.Vector3()
     const len = track.center.length
     for (const lane of track.lanes) {
-      const gaps = lane.obstacles
-        .filter((o) => o.type === 'gap')
+      // Leave a hole in the road for jump gaps AND water (the water tile sits
+      // in the hole rather than on top of the road).
+      const holes = lane.obstacles
+        .filter((o) => o.type === 'gap' || o.type === 'water')
         .map((o) => [o.start, o.end] as [number, number])
-      const inGap = (d: number) => gaps.some(([s, e]) => d >= s && d <= e)
+      // Skip a tile if any part of it overlaps a hole, so no road shows under
+      // the water's edges.
+      const tileInHole = (d: number) =>
+        holes.some(([s, e]) => d - STEP / 2 < e && d + STEP / 2 > s)
       const steps = Math.max(1, Math.floor(len / STEP))
       for (let i = 0; i < steps; i++) {
         const d = (i + 0.5) * STEP
-        if (inGap(d)) continue
+        if (tileInHole(d)) continue
         const f = sampleCenter(track.center, d)
         // Basis: X across (right), Y up, Z along (tangent).
         xAxis.copy(f.right)
@@ -149,10 +154,10 @@ export default function StoneRoad({ track }: { track: Track }) {
   const lines = useMemo(() => {
     const geoms: THREE.BufferGeometry[] = []
     for (const lane of track.lanes) {
-      const gaps = lane.obstacles
-        .filter((o) => o.type === 'gap')
+      const holes = lane.obstacles
+        .filter((o) => o.type === 'gap' || o.type === 'water')
         .map((o) => [o.start, o.end] as [number, number])
-      const g = buildLaneLine(track, lane.offset, gaps, new THREE.Color(lane.color))
+      const g = buildLaneLine(track, lane.offset, holes, new THREE.Color(lane.color))
       if (g) geoms.push(g)
     }
     return geoms.length ? (mergeGeometries(geoms, false) ?? null) : null
