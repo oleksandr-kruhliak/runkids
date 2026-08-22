@@ -4,7 +4,7 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js'
 
-const TARGET_HEIGHT = 1.7 // world units the tallest dimension is scaled to
+const TARGET_SIZE = 1.7 // world units the largest dimension is scaled to
 
 /**
  * Loads a .glb model, clones it per rider (skeleton-safe so rigged/skinned
@@ -18,9 +18,24 @@ export default function Animal3D({ url, faceY = 0 }: { url: string; faceY?: numb
   const mixerRef = useRef<THREE.AnimationMixer | null>(null)
 
   const object = useMemo(() => {
+    const source = gltf.scene as THREE.Object3D
+
+    // Measure the ORIGINAL loaded scene, not a clone. A freshly-cloned skinned
+    // mesh hasn't had its world matrices updated, so Box3.setFromObject would
+    // read the tiny bind-pose geometry instead of the real posed size and the
+    // model would scale down to an invisible speck. The loader leaves the
+    // source's matrices set up correctly.
+    source.updateMatrixWorld(true)
+    const box = new THREE.Box3().setFromObject(source)
+    const size = box.getSize(new THREE.Vector3())
+    const center = box.getCenter(new THREE.Vector3())
+    const maxDim = Math.max(size.x, size.y, size.z) || 1
+    const scale = TARGET_SIZE / maxDim
+
     // SkeletonUtils.clone rebinds SkinnedMesh bones to the cloned skeleton —
-    // plain Object3D.clone(true) leaves them pointing at the original.
-    const model = cloneSkeleton(gltf.scene as THREE.Object3D)
+    // plain Object3D.clone(true) leaves them pointing at the original. The clone
+    // is geometrically identical to the source, so the source's box applies.
+    const model = cloneSkeleton(source)
     model.traverse((o) => {
       const mesh = o as THREE.Mesh
       if (mesh.isMesh) {
@@ -28,13 +43,7 @@ export default function Animal3D({ url, faceY = 0 }: { url: string; faceY?: numb
         mesh.frustumCulled = false
       }
     })
-
-    const box = new THREE.Box3().setFromObject(model)
-    const size = box.getSize(new THREE.Vector3())
-    const center = box.getCenter(new THREE.Vector3())
-    const scale = TARGET_HEIGHT / (Math.max(size.x, size.y, size.z) || 1)
-
-    // Recenter horizontally and drop feet to y=0.
+    // Recenter horizontally and drop feet to y=0 using the source measurement.
     model.position.set(-center.x, -box.min.y, -center.z)
 
     const inner = new THREE.Group()
