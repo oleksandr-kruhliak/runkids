@@ -1,7 +1,7 @@
 # Animal model credits
 
-The low-poly animal models in this folder (`cow`, `llama`, `bull`, `pig`,
-`stag`) are from the **Ultimate Animated Animals** / farm animal packs by
+The low-poly animal models in this folder (`cow`, `bull`, `stag`, `horse`,
+`zebra`) are from the **Ultimate Animated Animals** packs by
 **[Quaternius](https://quaternius.com/)**, distributed via
 [poly.pizza](https://poly.pizza/).
 
