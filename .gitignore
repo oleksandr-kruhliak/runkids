@@ -4,3 +4,6 @@ dist-ssr
 *.local
 .DS_Store
 .vite
+
+# Farm animal models are fetched at build time
+public/models/animals/*.glb
