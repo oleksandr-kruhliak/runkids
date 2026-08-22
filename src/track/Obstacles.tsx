@@ -8,14 +8,53 @@ const W = LANE_WIDTH - 0.2
 
 const OCEAN_URL = `${import.meta.env.BASE_URL}models/track/ocean.glb`
 
+// Shared time uniform driving the water wave in the vertex shader.
+const waveTime = { value: 0 }
+let oceanPrepared = false
+
+/**
+ * Make the ocean material translucent and give it an animated ripple. The
+ * displacement runs in the vertex shader (object/raw space) off a shared uTime
+ * uniform, so every water tile animates for the cost of one program.
+ */
+function prepareOceanMaterial(scene: THREE.Object3D) {
+  if (oceanPrepared) return
+  scene.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh) return
+    const m = mesh.material as THREE.MeshStandardMaterial
+    m.transparent = true
+    m.opacity = 0.72
+    m.depthWrite = false
+    m.roughness = 0.22
+    m.metalness = 0.1
+    m.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = waveTime
+      shader.vertexShader =
+        'uniform float uTime;\n' +
+        shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+           transformed.y +=
+             (sin(position.x * 0.016 + uTime * 1.3) *
+              cos(position.z * 0.013 + uTime)) * 42.0 +
+             sin(position.z * 0.03 + uTime * 1.7) * 16.0;`,
+        )
+    }
+    m.needsUpdate = true
+  })
+  oceanPrepared = true
+}
+
 /**
  * A pool of water using the Poly ocean tile: scaled to fill the lane
- * (width x obstacle length) with its wave height kept small, sitting on the
- * road surface, and gently bobbing so it reads as living water.
+ * (width x obstacle length), translucent so you can see the animal wading, with
+ * an animated ripple plus a gentle overall bob.
  */
 function Water({ length }: { length: number }) {
   const gltf = useGLTF(OCEAN_URL)
   const group = useRef<THREE.Group>(null)
+  prepareOceanMaterial(gltf.scene as THREE.Object3D)
 
   const object = useMemo(() => {
     const clone = (gltf.scene as THREE.Object3D).clone(true)
@@ -35,7 +74,8 @@ function Water({ length }: { length: number }) {
   }, [gltf.scene, length])
 
   useFrame((state) => {
-    if (group.current) group.current.position.y = 0.02 + Math.sin(state.clock.elapsedTime * 1.6) * 0.03
+    waveTime.value = state.clock.elapsedTime
+    if (group.current) group.current.position.y = 0.02 + Math.sin(state.clock.elapsedTime * 1.6) * 0.025
   })
 
   return (
