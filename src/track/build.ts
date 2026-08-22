@@ -67,8 +67,8 @@ export interface ObstaclePlacement {
 // --- Timed obstacle behavior (shared by visuals and rider logic) ---
 export const STOPPER_UP = 3 // seconds raised (blocking)
 export const STOPPER_DOWN = 3 // seconds lowered (clear)
-export const SPINNER_SPEED = 2.2 // rad/s
-export const SPINNER_WINDOW = 0.85 // rad half-window where the arm covers the lane
+export const SPINNER_SPEED = 2.0 // rad/s
+export const SPINNER_WINDOW = 1.15 // rad half-window where the arm sweeps over the lane
 
 /** Is a stopper (identified by its phase) currently raised? */
 export function stopperUp(phase: number, t: number): boolean {

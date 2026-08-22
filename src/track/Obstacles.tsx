@@ -15,8 +15,8 @@ function Spinner({ phase }: { phase: number }) {
   useFrame((state) => {
     if (arm.current) arm.current.rotation.y = spinnerAngle(phase, state.clock.elapsedTime)
   })
-  const edgeX = LANE_WIDTH / 2 + 0.25
-  const armLen = LANE_WIDTH + 0.6
+  const edgeX = LANE_WIDTH / 2 + 0.2
+  const armLen = LANE_WIDTH + 0.3 // reaches across the lane without overshooting
   const armY = 0.42 // low, near the animals' body height
   return (
     <group>
@@ -25,14 +25,15 @@ function Spinner({ phase }: { phase: number }) {
         <cylinderGeometry args={[0.13, 0.16, 0.56, 12]} />
         <meshStandardMaterial color="#455a64" metalness={0.4} roughness={0.5} />
       </mesh>
-      {/* Arm pivots at the post and reaches across the road, low down */}
+      {/* Arm pivots at the post and sweeps across the road, low down. The whole
+          bar is a hazard; the yellow marks its swinging tip. */}
       <group ref={arm} position={[edgeX, armY, 0]}>
         <mesh position={[-armLen / 2, 0, 0]}>
-          <boxGeometry args={[armLen, 0.22, 0.22]} />
-          <meshStandardMaterial color="#e53935" />
+          <boxGeometry args={[armLen, 0.26, 0.26]} />
+          <meshStandardMaterial color="#e53935" emissive="#b71c1c" emissiveIntensity={0.25} />
         </mesh>
-        <mesh position={[-armLen + 0.15, 0, 0]}>
-          <boxGeometry args={[0.4, 0.42, 0.42]} />
+        <mesh position={[-armLen + 0.18, 0, 0]}>
+          <boxGeometry args={[0.44, 0.46, 0.46]} />
           <meshStandardMaterial color="#ffca28" emissive="#ff8f00" emissiveIntensity={0.4} />
         </mesh>
       </group>
