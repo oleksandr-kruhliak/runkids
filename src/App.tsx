@@ -234,36 +234,65 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const [trialTimes, setTrialTimes] = useState<(number | null)[]>(() => Array(NUM_LANES).fill(null))
   const [trialDone, setTrialDone] = useState(false)
   const [displayTime, setDisplayTime] = useState(0)
+  const [armed, setArmed] = useState(false) // false during the 3-2-1 countdown
+  const [countdown, setCountdown] = useState<number | null>(null) // 3,2,1,0(GO),null
   const trialTimeRef = useRef(0)
   const gapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const trialProp = useMemo(() => ({ active: trialActive, lane: trialLane }), [trialActive, trialLane])
+  const trialProp = useMemo(
+    () => ({ active: trialActive, lane: trialLane, armed }),
+    [trialActive, trialLane, armed],
+  )
 
   const label = (l: number) => laneDesigns[l]?.name ?? LANE_NAMES[l]
 
-  const clearGap = () => {
+  const clearTimers = () => {
     if (gapTimer.current) clearTimeout(gapTimer.current)
+    if (cdTimer.current) clearTimeout(cdTimer.current)
     gapTimer.current = null
+    cdTimer.current = null
+  }
+
+  // Bring a racer to the line, run a 3-2-1-GO! countdown, then let it go.
+  const startRacer = (lane: number) => {
+    setTrialLane(lane)
+    setArmed(false)
+    trialTimeRef.current = 0
+    setDisplayTime(0)
+    let n = 3
+    setCountdown(3)
+    const tick = () => {
+      n -= 1
+      if (n >= 0) {
+        setCountdown(n) // 2, 1, then 0 = "GO!"
+        cdTimer.current = setTimeout(tick, 700)
+      } else {
+        setCountdown(null)
+        setArmed(true) // GO — the racer starts and the clock runs
+      }
+    }
+    cdTimer.current = setTimeout(tick, 700)
   }
 
   const startTrial = () => {
-    clearGap()
+    clearTimers()
     setRunning(Array(NUM_LANES).fill(false))
     setResetSignal((n) => n + 1)
-    trialTimeRef.current = 0
-    setDisplayTime(0)
     setTrialTimes(Array(NUM_LANES).fill(null))
     setTrialDone(false)
     setTrialActive(true)
     setFollow(true)
     setFollowTarget(-1) // follow whoever is running
-    setTrialLane(0)
+    startRacer(0)
   }
 
   const exitTrial = () => {
-    clearGap()
+    clearTimers()
     setTrialActive(false)
     setTrialLane(-1)
+    setArmed(false)
+    setCountdown(null)
     setTrialDone(false)
     setFollow(false)
     setResetSignal((n) => n + 1)
@@ -276,14 +305,13 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       n[lane] = time
       return n
     })
+    setArmed(false)
     setTrialLane(-1) // brief pause on the finish line before the next racer
-    clearGap()
+    clearTimers()
     gapTimer.current = setTimeout(() => {
       const next = lane + 1
       if (next < NUM_LANES) {
-        trialTimeRef.current = 0
-        setDisplayTime(0)
-        setTrialLane(next)
+        startRacer(next)
       } else {
         setTrialDone(true)
         setFollow(false)
@@ -292,7 +320,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     }, 1100)
   }
 
-  useEffect(() => clearGap, [])
+  useEffect(() => clearTimers, [])
 
   // Live-update the big timer while an animal is running.
   useEffect(() => {
@@ -457,7 +485,18 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             <button className="trial-close" onClick={exitTrial} aria-label="Stop time trial">
               ✕
             </button>
-            {trialLane >= 0 ? (
+            {countdown !== null && trialLane >= 0 ? (
+              <>
+                <div className="trial-now">
+                  <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[trialLane].body }} />
+                  Get ready, {label(trialLane)}!
+                </div>
+                <div key={countdown} className={`trial-count ${countdown === 0 ? 'go' : ''}`}>
+                  {countdown === 0 ? 'GO!' : countdown}
+                </div>
+                <div className="trial-progress">Racer {trialLane + 1} of {NUM_LANES}</div>
+              </>
+            ) : trialLane >= 0 ? (
               <>
                 <div className="trial-now">
                   <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[trialLane].body }} />

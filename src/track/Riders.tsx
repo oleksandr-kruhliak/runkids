@@ -55,8 +55,9 @@ interface RidersProps {
   faceY: number
   /** Per-lane saved cube-animal design; when set, that lane rides it. */
   laneDesigns?: (AnimalDesign | null)[]
-  /** Time-trial mode: run one lane at a time and time each run. */
-  trial?: { active: boolean; lane: number }
+  /** Time-trial mode: run one lane at a time and time each run. `armed` is
+   * false during the 3-2-1 countdown so the racer waits at the start line. */
+  trial?: { active: boolean; lane: number; armed: boolean }
   /** Riders writes the current trial run's elapsed seconds here for display. */
   trialTimeRef?: MutableRefObject<number>
   /** Called when the active trial lane crosses the finish (one lap). */
@@ -138,7 +139,7 @@ export default function Riders({
       // in free mode a lane runs while its `running` flag is set (and loops).
       const isTrial = !!trial?.active
       const laneRunning = isTrial
-        ? trial!.lane === l && !finished.current[l] && len > 0
+        ? trial!.lane === l && trial!.armed && !finished.current[l] && len > 0
         : running[l]
 
       if (laneRunning) {
