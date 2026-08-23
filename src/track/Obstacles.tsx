@@ -5,11 +5,29 @@ import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
 
 const W = LANE_WIDTH - 0.2
 
+/** One heavy metal hammer head (with two dark side plates), at local x. */
+function HammerHead({ x }: { x: number }) {
+  return (
+    <group position={[x, 0, 0]}>
+      <mesh>
+        <boxGeometry args={[0.5, 0.56, 0.92]} />
+        <meshStandardMaterial color="#607d8b" metalness={0.5} roughness={0.4} />
+      </mesh>
+      {[0.46, -0.46].map((z, i) => (
+        <mesh key={i} position={[0, 0, z]}>
+          <boxGeometry args={[0.54, 0.6, 0.1]} />
+          <meshStandardMaterial color="#37474f" metalness={0.4} roughness={0.5} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 /**
- * A low swinging hammer: a short post at the lane edge with a half-lane-length
- * handle and a heavy head that swings back and forth over the road (reversing
- * direction). Rotation is synced to the rider logic, so the animal is knocked
- * back when the hammer passes over it.
+ * A low swinging double-headed hammer: a post at the lane edge with a handle
+ * that carries a heavy head on BOTH ends, swinging back and forth over the road
+ * (reversing direction). The inner head sweeps the lane to knock the animal;
+ * rotation is synced to the rider logic.
  */
 function Spinner({ phase }: { phase: number }) {
   const arm = useRef<THREE.Group>(null)
@@ -17,7 +35,7 @@ function Spinner({ phase }: { phase: number }) {
     if (arm.current) arm.current.rotation.y = spinnerAngle(phase, state.clock.elapsedTime)
   })
   const edgeX = LANE_WIDTH / 2 + 0.05
-  const armLen = LANE_WIDTH / 2 // half the road width
+  const armLen = LANE_WIDTH / 2 // each arm is half the road width
   const armY = 0.42 // low, near the animals' body height
   return (
     <group>
@@ -28,22 +46,13 @@ function Spinner({ phase }: { phase: number }) {
       </mesh>
       {/* Hammer pivots at the post and swings across the road, low down */}
       <group ref={arm} position={[edgeX, armY, 0]}>
-        {/* Wooden handle */}
-        <mesh position={[-armLen / 2, 0, 0]}>
-          <boxGeometry args={[armLen, 0.14, 0.14]} />
+        {/* Wooden handle running through the pivot, a head on each end */}
+        <mesh>
+          <boxGeometry args={[armLen * 2, 0.14, 0.14]} />
           <meshStandardMaterial color="#9c6b3f" flatShading />
         </mesh>
-        {/* Heavy metal head at the tip */}
-        <mesh position={[-armLen, 0, 0]}>
-          <boxGeometry args={[0.5, 0.56, 0.92]} />
-          <meshStandardMaterial color="#607d8b" metalness={0.5} roughness={0.4} />
-        </mesh>
-        {[0.46, -0.46].map((z, i) => (
-          <mesh key={i} position={[-armLen, 0, z]}>
-            <boxGeometry args={[0.54, 0.6, 0.1]} />
-            <meshStandardMaterial color="#37474f" metalness={0.4} roughness={0.5} />
-          </mesh>
-        ))}
+        <HammerHead x={-armLen} />
+        <HammerHead x={armLen} />
       </group>
     </group>
   )
