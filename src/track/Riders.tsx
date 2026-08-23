@@ -59,6 +59,7 @@ const KNOCK_SPEED = 7 // how fast the hammer flings the animal
 const KNOCK_DUR = 0.8 // how long the knock lasts after a hit (seconds)
 const MUD_SLOW = 0.25 // speed multiplier at full mud stickiness
 const MUD_LINGER = 0.9 // seconds mud keeps slowing the animal after it leaves
+const GROUP_SCALE = 0.82 // rider group scale (applies to primitive + 3D)
 
 export default function Riders({
   track,
@@ -208,7 +209,7 @@ export default function Riders({
             ref={(el) => {
               groupRefs.current[l] = el
             }}
-            scale={0.82}
+            scale={GROUP_SCALE}
           >
             {use ? (
               <ModelBoundary fallback={primitive}>
@@ -218,6 +219,7 @@ export default function Riders({
                     faceY={faceY}
                     laneIndex={l}
                     speedRef={speedRef}
+                    groundDrop={-RIDE_OFFSET / GROUP_SCALE}
                   />
                 </Suspense>
               </ModelBoundary>

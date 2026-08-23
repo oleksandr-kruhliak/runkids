@@ -22,6 +22,8 @@ interface Animal3DProps {
   laneIndex?: number
   /** Per-lane current forward speed; drives run-vs-idle animation. */
   speedRef?: MutableRefObject<number[]>
+  /** Local Y offset so the model's feet sit on the road (not floating). */
+  groundDrop?: number
 }
 
 /**
@@ -32,7 +34,13 @@ interface Animal3DProps {
  * while racing and stand still when held up. Models that only ship an idle
  * clip (no walk) simply idle.
  */
-export default function Animal3D({ url, faceY = 0, laneIndex = 0, speedRef }: Animal3DProps) {
+export default function Animal3D({
+  url,
+  faceY = 0,
+  laneIndex = 0,
+  speedRef,
+  groundDrop = 0,
+}: Animal3DProps) {
   const gltf = useGLTF(url)
   const mixerRef = useRef<THREE.AnimationMixer | null>(null)
   const runRef = useRef<THREE.AnimationAction | null>(null)
@@ -68,6 +76,9 @@ export default function Animal3D({ url, faceY = 0, laneIndex = 0, speedRef }: An
     const outer = new THREE.Group()
     outer.add(inner)
     outer.scale.setScalar(guess)
+    // Drop the model so its feet rest on the road instead of floating at the
+    // rider group's lifted origin.
+    outer.position.y = groundDrop
 
     // Set up idle + locomotion animation actions on this clone.
     mixerRef.current = null
@@ -100,7 +111,7 @@ export default function Animal3D({ url, faceY = 0, laneIndex = 0, speedRef }: An
       mixerRef.current = mixer
     }
     return { outer, model }
-  }, [gltf.scene, gltf.animations, faceY])
+  }, [gltf.scene, gltf.animations, faceY, groundDrop])
 
   // One-time size self-correction once the model is really mounted.
   const corrected = useRef(false)
