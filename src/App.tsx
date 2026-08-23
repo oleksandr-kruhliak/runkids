@@ -8,6 +8,7 @@ import { ANIMAL_PALETTES } from './track/Animal'
 import { AnimalDesign } from './studio/model'
 import { loadLibrary } from './studio/library'
 import Riders, { LeadState } from './track/Riders'
+import AnimalBadge from './track/AnimalBadge'
 import Obstacles from './track/Obstacles'
 import StoneRoad from './track/StoneRoad'
 import GrassField from './track/GrassField'
@@ -227,6 +228,97 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setFitSignal((n) => n + 1)
   }
 
+  // ---- Time trial: run one animal at a time, timed, then show a podium ----
+  const [trialActive, setTrialActive] = useState(false)
+  const [trialLane, setTrialLane] = useState(-1) // lane currently running, -1 = none
+  const [trialTimes, setTrialTimes] = useState<(number | null)[]>(() => Array(NUM_LANES).fill(null))
+  const [trialDone, setTrialDone] = useState(false)
+  const [displayTime, setDisplayTime] = useState(0)
+  const trialTimeRef = useRef(0)
+  const gapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const trialProp = useMemo(() => ({ active: trialActive, lane: trialLane }), [trialActive, trialLane])
+
+  const label = (l: number) => laneDesigns[l]?.name ?? LANE_NAMES[l]
+
+  const clearGap = () => {
+    if (gapTimer.current) clearTimeout(gapTimer.current)
+    gapTimer.current = null
+  }
+
+  const startTrial = () => {
+    clearGap()
+    setRunning(Array(NUM_LANES).fill(false))
+    setResetSignal((n) => n + 1)
+    trialTimeRef.current = 0
+    setDisplayTime(0)
+    setTrialTimes(Array(NUM_LANES).fill(null))
+    setTrialDone(false)
+    setTrialActive(true)
+    setFollow(true)
+    setFollowTarget(-1) // follow whoever is running
+    setTrialLane(0)
+  }
+
+  const exitTrial = () => {
+    clearGap()
+    setTrialActive(false)
+    setTrialLane(-1)
+    setTrialDone(false)
+    setFollow(false)
+    setResetSignal((n) => n + 1)
+  }
+
+  // Called from Riders when the running animal crosses the finish.
+  const onTrialFinish = (lane: number, time: number) => {
+    setTrialTimes((prev) => {
+      const n = [...prev]
+      n[lane] = time
+      return n
+    })
+    setTrialLane(-1) // brief pause on the finish line before the next racer
+    clearGap()
+    gapTimer.current = setTimeout(() => {
+      const next = lane + 1
+      if (next < NUM_LANES) {
+        trialTimeRef.current = 0
+        setDisplayTime(0)
+        setTrialLane(next)
+      } else {
+        setTrialDone(true)
+        setFollow(false)
+        setFitSignal((n) => n + 1)
+      }
+    }, 1100)
+  }
+
+  useEffect(() => clearGap, [])
+
+  // Live-update the big timer while an animal is running.
+  useEffect(() => {
+    if (!trialActive || trialLane < 0) return
+    let raf = 0
+    const tick = () => {
+      const v = Math.round(trialTimeRef.current * 10) / 10
+      setDisplayTime((prev) => (prev === v ? prev : v))
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [trialActive, trialLane])
+
+  // Ranking (fastest first) once every racer has a time.
+  const ranking = useMemo(
+    () =>
+      trialTimes
+        .map((time, lane) => ({ lane, time }))
+        .filter((r): r is { lane: number; time: number } => r.time != null)
+        .sort((a, b) => a.time - b.time),
+    [trialTimes],
+  )
+
+  const trialRunningCount = trialTimes.filter((t) => t != null).length
+
   // Start/finish gate spanning all lanes, oriented to the track start.
   const gate = useMemo(() => {
     const f = sampleCenter(track.center, 0)
@@ -342,6 +434,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               animalUrls={animalUrls}
               faceY={0}
               laneDesigns={laneDesigns}
+              trial={trialProp}
+              trialTimeRef={trialTimeRef}
+              onTrialFinish={onTrialFinish}
             />
           )}
 
@@ -355,6 +450,95 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           />
           <OrbitControls makeDefault enabled={!follow} enableDamping maxPolarAngle={Math.PI / 2.05} />
         </Canvas>
+
+        {/* Time-trial: big kid-friendly running timer */}
+        {trialActive && !trialDone && (
+          <div className="trial-hud">
+            <button className="trial-close" onClick={exitTrial} aria-label="Stop time trial">
+              ✕
+            </button>
+            {trialLane >= 0 ? (
+              <>
+                <div className="trial-now">
+                  <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[trialLane].body }} />
+                  {label(trialLane)} is running!
+                </div>
+                <div className="trial-time">
+                  {displayTime.toFixed(1)}
+                  <span className="unit">s</span>
+                </div>
+                <div className="trial-progress">Racer {trialLane + 1} of {NUM_LANES}</div>
+              </>
+            ) : (
+              <>
+                <div className="trial-now">🏁 {label(trialRunningCount - 1)} finished!</div>
+                <div className="trial-time done">
+                  {(trialTimes[trialRunningCount - 1] ?? 0).toFixed(1)}
+                  <span className="unit">s</span>
+                </div>
+                <div className="trial-progress">
+                  {trialRunningCount < NUM_LANES ? `Get ready, ${label(trialRunningCount)}…` : 'Adding up the winners…'}
+                </div>
+              </>
+            )}
+            {ranking.length > 0 && (
+              <div className="trial-splits">
+                {ranking.map((r, i) => (
+                  <span key={r.lane} className="split">
+                    <b>{i + 1}.</b>
+                    <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[r.lane].body }} />
+                    {label(r.lane)} · {r.time.toFixed(1)}s
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Time-trial: results podium */}
+        {trialDone && ranking.length > 0 && (
+          <div className="results-overlay">
+            <div className="results-card">
+              <h2 className="results-title">🏆 Winners!</h2>
+              <div className="podium">
+                {[1, 0, 2].map((pos) => {
+                  const r = ranking[pos]
+                  if (!r) return <div key={pos} className="podium-col empty" />
+                  const medal = ['🥇', '🥈', '🥉'][pos]
+                  return (
+                    <div key={pos} className={`podium-col place-${pos + 1}`}>
+                      <div className="podium-badge">
+                        <AnimalBadge design={laneDesigns[r.lane]} colors={ANIMAL_PALETTES[r.lane]} />
+                      </div>
+                      <div className="podium-name">
+                        <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[r.lane].body }} />
+                        {label(r.lane)}
+                      </div>
+                      <div className="podium-step">
+                        <span className="podium-medal">{medal}</span>
+                        <span className="podium-time">{r.time.toFixed(1)}s</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <ol className="results-list">
+                {ranking.map((r, i) => (
+                  <li key={r.lane}>
+                    <span className="rank-num">{i + 1}</span>
+                    <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[r.lane].body }} />
+                    <span className="rank-name">{label(r.lane)}</span>
+                    <span className="rank-time">{r.time.toFixed(1)}s</span>
+                  </li>
+                ))}
+              </ol>
+              <div className="results-actions">
+                <button className="results-btn again" onClick={startTrial}>🔁 Race again</button>
+                <button className="results-btn" onClick={exitTrial}>✕ Done</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {shape.length === 0 && (
           <div className="hint-overlay">Tap a Track piece below to start building</div>
@@ -538,9 +722,16 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             ⟲ Reset
           </button>
           <button
+            className="action trial"
+            onClick={startTrial}
+            disabled={track.length === 0 || trialActive}
+          >
+            ⏱ Time Trial
+          </button>
+          <button
             className={`action play ${anyRunning ? 'on' : ''}`}
             onClick={anyRunning ? stopAll : startAll}
-            disabled={track.length === 0}
+            disabled={track.length === 0 || trialActive}
           >
             {anyRunning ? '■ Stop all' : '▶ Race all'}
           </button>

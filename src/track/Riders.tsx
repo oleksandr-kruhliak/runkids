@@ -55,6 +55,12 @@ interface RidersProps {
   faceY: number
   /** Per-lane saved cube-animal design; when set, that lane rides it. */
   laneDesigns?: (AnimalDesign | null)[]
+  /** Time-trial mode: run one lane at a time and time each run. */
+  trial?: { active: boolean; lane: number }
+  /** Riders writes the current trial run's elapsed seconds here for display. */
+  trialTimeRef?: MutableRefObject<number>
+  /** Called when the active trial lane crosses the finish (one lap). */
+  onTrialFinish?: (lane: number, time: number) => void
 }
 
 const BASE_SPEED = 8
@@ -76,6 +82,9 @@ export default function Riders({
   animalUrls,
   faceY,
   laneDesigns,
+  trial,
+  trialTimeRef,
+  onTrialFinish,
 }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
@@ -87,6 +96,11 @@ export default function Riders({
   // Per-lane current forward speed, so the 3D models can play a run/idle
   // animation that matches whether the animal is actually moving.
   const speedRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  // Time-trial: which lanes have crossed the finish (parked at the line).
+  const finished = useRef<boolean[]>(Array.from({ length: NUM_LANES }, () => false))
+  // Keep the finish callback fresh without re-subscribing the frame loop.
+  const onFinishRef = useRef(onTrialFinish)
+  onFinishRef.current = onTrialFinish
 
   // Reset every animal back to the start line when asked.
   useEffect(() => {
@@ -97,6 +111,7 @@ export default function Riders({
       mudStick.current[l] = 0
       speedRef.current[l] = 0
       distancesRef.current[l] = 0
+      finished.current[l] = false
     }
   }, [resetSignal, distancesRef])
 
@@ -119,7 +134,14 @@ export default function Riders({
 
       const effect = laneEffect(lane, dist.current[l], len)
 
-      if (running[l]) {
+      // In a time trial only the current lane runs, once, until it finishes;
+      // in free mode a lane runs while its `running` flag is set (and loops).
+      const isTrial = !!trial?.active
+      const laneRunning = isTrial
+        ? trial!.lane === l && !finished.current[l] && len > 0
+        : running[l]
+
+      if (laneRunning) {
         let lap = len > 0 ? dist.current[l] % len : dist.current[l]
         if (lap < 0) lap += len
 
@@ -153,19 +175,33 @@ export default function Riders({
         if (hold) v = 0
         else if (t < knockUntil.current[l]) v = KNOCK_SPEED * knockDir.current[l]
         dist.current[l] += v * dt
-        if (dist.current[l] < 0) dist.current[l] += len
+
+        if (isTrial) {
+          // Time this run, and stop the animal on the finish line after a lap.
+          if (trialTimeRef) trialTimeRef.current += dt
+          if (dist.current[l] < 0) dist.current[l] = 0
+          if (dist.current[l] >= len) {
+            dist.current[l] = len
+            finished.current[l] = true
+            onFinishRef.current?.(l, trialTimeRef ? trialTimeRef.current : 0)
+          }
+        } else if (dist.current[l] < 0) {
+          dist.current[l] += len
+        }
         speedRef.current[l] = v
       } else {
         speedRef.current[l] = 0
       }
 
-      const f = sampleCenter(track.center, dist.current[l])
+      // Where the animal sits along the course (single lap in a trial).
+      const along = isTrial ? Math.max(0, Math.min(dist.current[l], len)) : dist.current[l]
+      const f = sampleCenter(track.center, along)
       g.position
         .copy(f.pos)
         .addScaledVector(f.right, lane.offset)
         .addScaledVector(f.up, RIDE_OFFSET)
       g.position.y += jumpOffset(effect.type, effect.u)
-      if (running[l] && effect.type !== 'gap' && effect.type !== 'trampoline') {
+      if (laneRunning && effect.type !== 'gap' && effect.type !== 'trampoline') {
         g.position.y += Math.abs(Math.sin(dist.current[l] * 1.4)) * 0.06
       }
 
@@ -176,12 +212,14 @@ export default function Riders({
       g.quaternion.copy(q)
 
       // Publish current lap distance for obstacle (crate) hit detection.
-      let lapNow = len > 0 ? dist.current[l] % len : dist.current[l]
+      let lapNow = len > 0 ? along % len : along
       if (lapNow < 0) lapNow += len
       distancesRef.current[l] = lapNow
 
-      if (dist.current[l] > leadDist) {
-        leadDist = dist.current[l]
+      // Follow target: in a trial, keep the camera on the running animal.
+      const rank = isTrial && trial!.lane === l ? Infinity : dist.current[l]
+      if (rank > leadDist) {
+        leadDist = rank
         leadIdx = l
       }
     }
