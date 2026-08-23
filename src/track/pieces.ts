@@ -17,7 +17,9 @@ export type PieceType =
 export type PieceGroup = 'shape' | 'obstacle'
 
 // Shape pieces build the shared path (all lanes follow it).
-export const SHAPE_PIECES: PieceType[] = ['straight', 'left', 'right', 'rampUp', 'rampDown', 'loop']
+// Note: 'loop' is temporarily removed from the palette (still supported by the
+// engine, just not offered as a build option for now).
+export const SHAPE_PIECES: PieceType[] = ['straight', 'left', 'right', 'rampUp', 'rampDown']
 // Obstacle pieces are placed per-lane.
 export const OBSTACLE_PIECES: PieceType[] = [
   'gap',
