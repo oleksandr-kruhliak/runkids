@@ -68,8 +68,8 @@ export interface ObstaclePlacement {
 export const STOPPER_UP = 3 // seconds raised (blocking)
 export const STOPPER_DOWN = 3 // seconds lowered (clear)
 export const SPIN_AMP = 4.0 // swing amplitude (rad) — the hammer swings ±this, reversing direction
-export const SPIN_RATE = 1.1 // swing rate
-export const SPINNER_WINDOW = 1.0 // rad half-window where the hammer is over the lane
+export const SPIN_RATE = 2.4 // swing rate (faster -> strikes the lane more often)
+export const SPINNER_WINDOW = 1.4 // rad half-window where the hammer is over the lane
 
 /** Is a stopper (identified by its phase) currently raised? */
 export function stopperUp(phase: number, t: number): boolean {
@@ -102,6 +102,17 @@ export function spinnerHit(phase: number, t: number): boolean {
   if (a < 0) a += 2 * Math.PI
   if (a > Math.PI) a -= 2 * Math.PI
   return Math.abs(a) < SPINNER_WINDOW
+}
+
+/**
+ * Did the hammer sweep across the lane (its angle cross 0, the moment the head
+ * is over the lane) at any point during the last frame's interval [t-dt, t]?
+ * Frame-rate independent, so a brief strike is never missed between frames.
+ */
+export function spinnerStruck(phase: number, t: number, dt: number): boolean {
+  const prev = Math.sin(SPIN_RATE * (t - dt) + phase)
+  const now = Math.sin(SPIN_RATE * t + phase)
+  return prev === 0 || prev < 0 !== now < 0
 }
 
 export interface Track {

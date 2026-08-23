@@ -9,7 +9,7 @@ import {
   laneEffect,
   sampleCenter,
   speedMultiplier,
-  spinnerHit,
+  spinnerStruck,
   spinnerSwingSign,
   stopperUp,
 } from './build'
@@ -127,8 +127,9 @@ export default function Riders({
             let ahead = o.dist - lap
             if (ahead < 0) ahead += len
             if (ahead < STOP_HOLD_AHEAD) hold = true
-          } else if (o.type === 'spinner' && spinnerHit(o.dist, t)) {
-            if (lap >= o.start && lap <= o.end) {
+          } else if (o.type === 'spinner') {
+            // Knock when the hammer sweeps across while the animal is under it.
+            if (lap >= o.start && lap <= o.end && spinnerStruck(o.dist, t, Math.min(delta, 0.1))) {
               knockUntil.current[l] = t + KNOCK_DUR
               knockDir.current[l] = spinnerSwingSign(o.dist, t)
             }
