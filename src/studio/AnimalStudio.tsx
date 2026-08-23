@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import EditorCanvas from './EditorCanvas'
+import { useHistory } from './useHistory'
 import {
   AnimalDesign,
   Block,
@@ -33,7 +34,8 @@ const AXES: Array<0 | 1 | 2> = [0, 1, 2]
 const AXIS_LABEL = ['X', 'Y', 'Z']
 
 export default function AnimalStudio({ onExit }: { onExit: () => void }) {
-  const [design, setDesign] = useState<AnimalDesign>(() => starterFox())
+  const { state: design, commit, undo, redo, load, canUndo, canRedo } =
+    useHistory<AnimalDesign>(() => starterFox())
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [clip, setClip] = useState<Clip>('walk')
   const [playing, setPlaying] = useState(true)
@@ -46,29 +48,34 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
     [design.blocks, selectedId],
   )
 
-  // ---- design mutation helpers (immutable) ----
-  const patchDesign = (patch: Partial<AnimalDesign>) => setDesign((d) => ({ ...d, ...patch }))
+  // ---- design mutation helpers (immutable, history-tracked) ----
+  // A `tag` groups rapid successive edits (slider drag, typing) into one undo.
+  const patchDesign = (patch: Partial<AnimalDesign>, tag?: string) =>
+    commit({ ...design, ...patch }, tag)
 
-  const patchBlock = (id: string, patch: Partial<Block>) =>
-    setDesign((d) => ({
-      ...d,
-      blocks: d.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)),
-    }))
+  const patchBlock = (id: string, patch: Partial<Block>, tag?: string) =>
+    commit(
+      { ...design, blocks: design.blocks.map((b) => (b.id === id ? { ...b, ...patch } : b)) },
+      tag,
+    )
 
   const setVec = (id: string, field: 'pos' | 'size' | 'rot', axis: number, value: number) =>
-    setDesign((d) => ({
-      ...d,
-      blocks: d.blocks.map((b) => {
-        if (b.id !== id) return b
-        const next = [...b[field]] as Vec3
-        next[axis] = value
-        return { ...b, [field]: next }
-      }),
-    }))
+    commit(
+      {
+        ...design,
+        blocks: design.blocks.map((b) => {
+          if (b.id !== id) return b
+          const next = [...b[field]] as Vec3
+          next[axis] = value
+          return { ...b, [field]: next }
+        }),
+      },
+      `vec:${id}:${field}:${axis}`,
+    )
 
   const addBlock = () => {
     const b = newBlock(selected ?? undefined)
-    setDesign((d) => ({ ...d, blocks: [...d.blocks, b] }))
+    commit({ ...design, blocks: [...design.blocks, b] })
     setSelectedId(b.id)
   }
 
@@ -81,31 +88,52 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
       name: src.name + ' copy',
       pos: [src.pos[0] + 0.3, src.pos[1], src.pos[2]] as Vec3,
     }
-    setDesign((d) => ({ ...d, blocks: [...d.blocks, copy] }))
+    commit({ ...design, blocks: [...design.blocks, copy] })
     setSelectedId(copy.id)
   }
 
   const deleteBlock = (id: string) => {
-    setDesign((d) => ({ ...d, blocks: d.blocks.filter((b) => b.id !== id) }))
+    commit({ ...design, blocks: design.blocks.filter((b) => b.id !== id) })
     if (selectedId === id) setSelectedId(null)
   }
 
   const setAnim = (c: Clip, key: string, value: number) =>
-    setDesign((d) => ({
-      ...d,
-      anim: { ...d.anim, [c]: { ...d.anim[c], [key]: value } },
-    }))
+    commit(
+      { ...design, anim: { ...design.anim, [c]: { ...design.anim[c], [key]: value } } },
+      `anim:${c}:${key}`,
+    )
+
+  // Keyboard: Cmd/Ctrl+Z = undo, Cmd/Ctrl+Shift+Z or Ctrl+Y = redo. Skip when
+  // typing in a field so native text undo still works there.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      const t = e.target as HTMLElement | null
+      const tag = t?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      const k = e.key.toLowerCase()
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        undo()
+      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+        e.preventDefault()
+        redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [undo, redo])
 
   // ---- library actions ----
   const save = () => setLibrary((lib) => upsertDesign(lib, design))
   const loadDesign = (d: AnimalDesign) => {
-    setDesign(structuredCloneSafe(d))
+    load(structuredCloneSafe(d))
     setSelectedId(null)
     setShowLibrary(false)
   }
   const removeFromLibrary = (id: string) => setLibrary((lib) => deleteDesign(lib, id))
   const startNew = (d: AnimalDesign) => {
-    setDesign(d)
+    load(d)
     setSelectedId(null)
   }
   const onImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,7 +141,7 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
     if (!file) return
     importDesignFile(file)
       .then((d) => {
-        setDesign(d)
+        load(d)
         setSelectedId(null)
       })
       .catch((err) => alert(err.message))
@@ -133,11 +161,17 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
           <input
             className="name-input"
             value={design.name}
-            onChange={(e) => patchDesign({ name: e.target.value })}
+            onChange={(e) => patchDesign({ name: e.target.value }, 'name')}
             aria-label="Animal name"
           />
         </div>
         <div className="studio-actions">
+          <button className="mini" onClick={undo} disabled={!canUndo} title="Undo (Ctrl/⌘+Z)">
+            ↶
+          </button>
+          <button className="mini" onClick={redo} disabled={!canRedo} title="Redo (Ctrl/⌘+Shift+Z)">
+            ↷
+          </button>
           <button className="mini" onClick={() => startNew(starterFox())} title="Start from the fox">
             🦊 Fox
           </button>
@@ -254,7 +288,7 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
               <input
                 className="block-name-input"
                 value={selected.name}
-                onChange={(e) => patchBlock(selected.id, { name: e.target.value })}
+                onChange={(e) => patchBlock(selected.id, { name: e.target.value }, `bname:${selected.id}`)}
                 aria-label="Block name"
               />
               <div className="inspect-actions">
@@ -295,7 +329,7 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
                 type="color"
                 className="swatch color-pick"
                 value={selected.color}
-                onChange={(e) => patchBlock(selected.id, { color: e.target.value })}
+                onChange={(e) => patchBlock(selected.id, { color: e.target.value }, `color:${selected.id}`)}
                 aria-label="Custom color"
               />
             </div>
