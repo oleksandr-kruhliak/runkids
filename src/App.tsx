@@ -4,11 +4,14 @@ import { OrbitControls, Grid, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { OBSTACLE_PIECES, SHAPE_PIECES, PIECE_META, PieceType } from './track/pieces'
 import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from './track/build'
-import { ANIMAL_PALETTES } from './track/Animal'
+import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
 import { loadLibrary } from './studio/library'
 import Riders, { LeadState } from './track/Riders'
 import AnimalBadge from './track/AnimalBadge'
+import PlaySetup, { PlayConfig } from './PlaySetup'
+import Confetti from './Confetti'
+import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
 import StoneRoad from './track/StoneRoad'
 import GrassField from './track/GrassField'
@@ -126,19 +129,47 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const [laneAnimalIds, setLaneAnimalIds] = useState<string[]>(() => Array(NUM_LANES).fill(''))
   const refreshSaved = () => setSaved(loadLibrary())
 
+  // App view: the quick-play setup screen, the classic builder, or immersive play.
+  const [mode, setMode] = useState<'setup' | 'build' | 'play'>('setup')
+  // Quick-play: the chosen racers and the generated course.
+  const [picks, setPicks] = useState<PlayConfig['picks']>([])
+  const [generated, setGenerated] = useState<{ shape: PieceType[]; laneObstacles: PieceType[][] } | null>(null)
+
   const laneDesigns = useMemo(
     () => laneAnimalIds.map((id) => saved.find((d) => d.id === id) ?? null),
     [laneAnimalIds, saved],
   )
 
+  // Unified racer list for the active mode: name, colours, and optional custom
+  // design. Play uses the picked racers; the builder uses the five lanes.
+  const racers = useMemo(() => {
+    if (mode === 'play') {
+      return picks.map((p) => ({
+        name: p.name,
+        colors: p.colors,
+        design: p.designId ? saved.find((d) => d.id === p.designId) ?? null : null,
+      }))
+    }
+    return Array.from({ length: NUM_LANES }, (_, l) => ({
+      name: laneDesigns[l]?.name ?? LANE_NAMES[l],
+      colors: ANIMAL_PALETTES[l] as AnimalColors,
+      design: laneDesigns[l],
+    }))
+  }, [mode, picks, saved, laneDesigns])
+
+  const racerCount = racers.length
+  const label = (l: number) => racers[l]?.name ?? LANE_NAMES[l % LANE_NAMES.length]
+  const laneHex = (l: number) => racers[l]?.colors.body ?? ANIMAL_PALETTES[l % ANIMAL_PALETTES.length].body
+
   const { shape, laneObstacles } = useMemo(() => {
+    if (mode === 'play' && generated) return generated
     const shape = actions.filter((a) => a.kind === 'shape').map((a) => a.pt)
     const laneObstacles: PieceType[][] = Array.from({ length: NUM_LANES }, () => [])
     for (const a of actions) {
       if (a.kind === 'obstacle' && a.lane != null) laneObstacles[a.lane].push(a.pt)
     }
     return { shape, laneObstacles }
-  }, [actions])
+  }, [mode, generated, actions])
 
   const track = useMemo(() => buildTrack(shape, laneObstacles), [shape, laneObstacles])
 
@@ -240,12 +271,13 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const gapTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [paused, setPaused] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
   const trialProp = useMemo(
     () => ({ active: trialActive, lane: trialLane, armed }),
     [trialActive, trialLane, armed],
   )
-
-  const label = (l: number) => laneDesigns[l]?.name ?? LANE_NAMES[l]
 
   const clearTimers = () => {
     if (gapTimer.current) clearTimeout(gapTimer.current)
@@ -275,11 +307,13 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     cdTimer.current = setTimeout(tick, 700)
   }
 
-  const startTrial = () => {
+  const startTrial = (count = racerCount) => {
     clearTimers()
+    setPaused(false)
+    setMenuOpen(false)
     setRunning(Array(NUM_LANES).fill(false))
     setResetSignal((n) => n + 1)
-    setTrialTimes(Array(NUM_LANES).fill(null))
+    setTrialTimes(Array(count).fill(null))
     setTrialDone(false)
     setTrialActive(true)
     setFollow(true)
@@ -294,6 +328,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setArmed(false)
     setCountdown(null)
     setTrialDone(false)
+    setPaused(false)
+    setMenuOpen(false)
     setFollow(false)
     setResetSignal((n) => n + 1)
   }
@@ -310,7 +346,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     clearTimers()
     gapTimer.current = setTimeout(() => {
       const next = lane + 1
-      if (next < NUM_LANES) {
+      if (next < racerCount) {
         startRacer(next)
       } else {
         setTrialDone(true)
@@ -321,6 +357,49 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   }
 
   useEffect(() => clearTimers, [])
+
+  // ---- Quick play: generate a course from the setup screen and auto-run ----
+  const handleGenerate = (config: PlayConfig) => {
+    const targetLen = Math.max(20, config.avgTime * BASE_SPEED)
+    const shape = generateShape(targetLen)
+    const laneObstacles = generateLaneObstacles(config.picks.length, targetLen, config.obstaclePct)
+    setPicks(config.picks)
+    setGenerated({ shape, laneObstacles })
+    setMode('play')
+    // Kick off the trial once the generated track is in place.
+    startTrial(config.picks.length)
+  }
+
+  const backToSetup = () => {
+    exitTrial()
+    setGenerated(null)
+    setMode('setup')
+  }
+
+  // ESC pauses immersive play and opens the menu; resume closes it.
+  const togglePauseMenu = () => {
+    if (!trialActive) return
+    setMenuOpen((open) => {
+      const next = !open
+      setPaused(next)
+      return next
+    })
+  }
+  const resumePlay = () => {
+    setMenuOpen(false)
+    setPaused(false)
+  }
+  useEffect(() => {
+    if (mode !== 'play') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        togglePauseMenu()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [mode, trialActive])
 
   // Live-update the big timer while an animal is running.
   useEffect(() => {
@@ -353,16 +432,26 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     const x = new THREE.Vector3().crossVectors(f.up, f.tangent).normalize()
     const y = new THREE.Vector3().crossVectors(f.tangent, x).normalize()
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, f.tangent))
-    const halfW = ((NUM_LANES - 1) / 2) * LANE_SPACING + LANE_WIDTH / 2 + 0.6
+    const halfW = ((racerCount - 1) / 2) * LANE_SPACING + LANE_WIDTH / 2 + 0.6
     return {
       pos: [f.pos.x, f.pos.y, f.pos.z] as [number, number, number],
       quaternion: [q.x, q.y, q.z, q.w] as [number, number, number, number],
       halfW,
     }
-  }, [track])
+  }, [track, racerCount])
+
+  // The quick-play setup screen is the landing view.
+  if (mode === 'setup') {
+    return <PlaySetup saved={saved} onGenerate={handleGenerate} onAdvanced={() => setMode('build')} />
+  }
+
+  const playing = mode === 'play'
+  const laneDesignsOut = racers.map((r) => r.design)
+  const laneColorsOut = racers.map((r) => r.colors)
 
   return (
-    <div className="app">
+    <div className={`app ${playing ? 'immersive' : ''}`}>
+      {!playing && (
       <header className="topbar">
         <div className="brand">
           <span className="logo">🏁</span>
@@ -372,6 +461,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </div>
         </div>
         <div className="topbar-right">
+          <button className="mini" onClick={backToSetup} title="Quick-play setup">
+            🏠 Setup
+          </button>
           {onOpenStudio && (
             <button className="mini" onClick={onOpenStudio} title="Build your own cube animals">
               🐾 Studio
@@ -398,6 +490,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </button>
         </div>
       </header>
+      )}
 
       <div className="stage">
         <Canvas shadows camera={{ position: [26, 20, 30], fov: 50 }} dpr={[1, 2]}>
@@ -461,10 +554,12 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               use3d={use3d && has3d}
               animalUrls={animalUrls}
               faceY={0}
-              laneDesigns={laneDesigns}
+              laneDesigns={laneDesignsOut}
+              laneColors={laneColorsOut}
               trial={trialProp}
               trialTimeRef={trialTimeRef}
               onTrialFinish={onTrialFinish}
+              paused={paused}
             />
           )}
 
@@ -488,25 +583,25 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             {countdown !== null && trialLane >= 0 ? (
               <>
                 <div className="trial-now">
-                  <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[trialLane].body }} />
+                  <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(trialLane)}} />
                   Get ready, {label(trialLane)}!
                 </div>
                 <div key={countdown} className={`trial-count ${countdown === 0 ? 'go' : ''}`}>
                   {countdown === 0 ? 'GO!' : countdown}
                 </div>
-                <div className="trial-progress">Racer {trialLane + 1} of {NUM_LANES}</div>
+                <div className="trial-progress">Racer {trialLane + 1} of {racerCount}</div>
               </>
             ) : trialLane >= 0 ? (
               <>
                 <div className="trial-now">
-                  <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[trialLane].body }} />
+                  <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(trialLane)}} />
                   {label(trialLane)} is running!
                 </div>
                 <div className="trial-time">
                   {displayTime.toFixed(1)}
                   <span className="unit">s</span>
                 </div>
-                <div className="trial-progress">Racer {trialLane + 1} of {NUM_LANES}</div>
+                <div className="trial-progress">Racer {trialLane + 1} of {racerCount}</div>
               </>
             ) : (
               <>
@@ -516,7 +611,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                   <span className="unit">s</span>
                 </div>
                 <div className="trial-progress">
-                  {trialRunningCount < NUM_LANES ? `Get ready, ${label(trialRunningCount)}…` : 'Adding up the winners…'}
+                  {trialRunningCount < racerCount ? `Get ready, ${label(trialRunningCount)}…` : 'Adding up the winners…'}
                 </div>
               </>
             )}
@@ -525,7 +620,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 {ranking.map((r, i) => (
                   <span key={r.lane} className="split">
                     <b>{i + 1}.</b>
-                    <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[r.lane].body }} />
+                    <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
                     {label(r.lane)} · {r.time.toFixed(1)}s
                   </span>
                 ))}
@@ -537,6 +632,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         {/* Time-trial: results podium */}
         {trialDone && ranking.length > 0 && (
           <div className="results-overlay">
+            <Confetti />
             <div className="results-card">
               <h2 className="results-title">🏆 Winners!</h2>
               <div className="podium">
@@ -547,10 +643,10 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                   return (
                     <div key={pos} className={`podium-col place-${pos + 1}`}>
                       <div className="podium-badge">
-                        <AnimalBadge design={laneDesigns[r.lane]} colors={ANIMAL_PALETTES[r.lane]} />
+                        <AnimalBadge design={laneDesignsOut[r.lane]} colors={racers[r.lane]?.colors ?? ANIMAL_PALETTES[0]} />
                       </div>
                       <div className="podium-name">
-                        <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[r.lane].body }} />
+                        <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
                         {label(r.lane)}
                       </div>
                       <div className="podium-step">
@@ -565,25 +661,44 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 {ranking.map((r, i) => (
                   <li key={r.lane}>
                     <span className="rank-num">{i + 1}</span>
-                    <span className="lane-dot" style={{ ['--lane-color' as string]: ANIMAL_PALETTES[r.lane].body }} />
+                    <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
                     <span className="rank-name">{label(r.lane)}</span>
                     <span className="rank-time">{r.time.toFixed(1)}s</span>
                   </li>
                 ))}
               </ol>
               <div className="results-actions">
-                <button className="results-btn again" onClick={startTrial}>🔁 Race again</button>
-                <button className="results-btn" onClick={exitTrial}>✕ Done</button>
+                <button className="results-btn again" onClick={() => startTrial()}>🔁 Race again</button>
+                <button className="results-btn" onClick={playing ? backToSetup : exitTrial}>
+                  {playing ? '⚙ New setup' : '✕ Done'}
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {shape.length === 0 && (
+        {shape.length === 0 && !playing && (
           <div className="hint-overlay">Tap a Track piece below to start building</div>
         )}
 
-        {follow && (
+        {/* ESC pause menu (immersive play) */}
+        {playing && menuOpen && (
+          <div className="pause-overlay">
+            <div className="pause-card">
+              <h2 className="pause-title">Paused</h2>
+              <button className="pause-btn primary" onClick={resumePlay}>▶ Resume</button>
+              <button className="pause-btn" onClick={() => startTrial()}>↻ Restart</button>
+              <button className="pause-btn" onClick={backToSetup}>⟲ Reset</button>
+              <button className="pause-btn" onClick={backToSetup}>⚙ Open settings</button>
+            </div>
+          </div>
+        )}
+
+        {playing && !menuOpen && !trialDone && (
+          <button className="esc-hint" onClick={togglePauseMenu}>⏸ Menu (Esc)</button>
+        )}
+
+        {follow && !playing && (
           <div className="follow-bar">
             <span className="follow-label">Following</span>
             <button
@@ -606,7 +721,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </div>
         )}
 
-        {follow && (
+        {follow && !playing && (
           <div className="cam-controls">
             <div className="cam-readout">
               <span>Zoom {camView.dist.toFixed(2)}</span>
@@ -647,6 +762,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         )}
       </div>
 
+      {!playing && (
       <div className="toolbar">
         <div className="palette-group">
           <span className="group-title">Track shape (all lanes)</span>
@@ -762,7 +878,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </button>
           <button
             className="action trial"
-            onClick={startTrial}
+            onClick={() => startTrial()}
             disabled={track.length === 0 || trialActive}
           >
             ⏱ Time Trial
@@ -776,6 +892,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </button>
         </div>
       </div>
+      )}
     </div>
   )
 }

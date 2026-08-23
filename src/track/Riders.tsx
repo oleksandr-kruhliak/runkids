@@ -2,7 +2,6 @@ import { Component, MutableRefObject, ReactNode, Suspense, useEffect, useMemo, u
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
-  NUM_LANES,
   RIDE_OFFSET,
   Track,
   jumpOffset,
@@ -13,7 +12,7 @@ import {
   spinnerSwingSign,
   stopperUp,
 } from './build'
-import Animal, { ANIMAL_PALETTES } from './Animal'
+import Animal, { ANIMAL_PALETTES, AnimalColors } from './Animal'
 import Animal3D from './Animal3D'
 import RaceAnimal from './RaceAnimal'
 import { AnimalDesign } from '../studio/model'
@@ -62,8 +61,13 @@ interface RidersProps {
   trialTimeRef?: MutableRefObject<number>
   /** Called when the active trial lane crosses the finish (one lap). */
   onTrialFinish?: (lane: number, time: number) => void
+  /** Freeze all motion (ESC pause menu). */
+  paused?: boolean
+  /** Per-lane colours for the default (primitive) animal. */
+  laneColors?: AnimalColors[]
 }
 
+const MAX_LANES = 8 // upper bound on racers; ref arrays are sized to this
 const BASE_SPEED = 8
 const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
 const KNOCK_SPEED = 7 // how fast the hammer flings the animal
@@ -86,26 +90,28 @@ export default function Riders({
   trial,
   trialTimeRef,
   onTrialFinish,
+  paused,
+  laneColors,
 }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
-  const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  const dist = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Active hammer-knock impulse per lane: until when, and which direction.
-  const knockUntil = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
-  const knockDir = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  const knockUntil = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
+  const knockDir = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Per-lane mud stickiness (1 while in mud, decays after leaving).
-  const mudStick = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  const mudStick = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Per-lane current forward speed, so the 3D models can play a run/idle
   // animation that matches whether the animal is actually moving.
-  const speedRef = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
+  const speedRef = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Time-trial: which lanes have crossed the finish (parked at the line).
-  const finished = useRef<boolean[]>(Array.from({ length: NUM_LANES }, () => false))
+  const finished = useRef<boolean[]>(Array.from({ length: MAX_LANES }, () => false))
   // Keep the finish callback fresh without re-subscribing the frame loop.
   const onFinishRef = useRef(onTrialFinish)
   onFinishRef.current = onTrialFinish
 
   // Reset every animal back to the start line when asked.
   useEffect(() => {
-    for (let l = 0; l < NUM_LANES; l++) {
+    for (let l = 0; l < MAX_LANES; l++) {
       dist.current[l] = 0
       knockUntil.current[l] = 0
       knockDir.current[l] = 0
@@ -127,8 +133,9 @@ export default function Riders({
     const len = track.length
     let leadIdx = 0
     let leadDist = -Infinity
+    const count = track.lanes.length
 
-    for (let l = 0; l < NUM_LANES; l++) {
+    for (let l = 0; l < count; l++) {
       const g = groupRefs.current[l]
       const lane = track.lanes[l]
       if (!g || !lane) continue
@@ -138,9 +145,11 @@ export default function Riders({
       // In a time trial only the current lane runs, once, until it finishes;
       // in free mode a lane runs while its `running` flag is set (and loops).
       const isTrial = !!trial?.active
-      const laneRunning = isTrial
-        ? trial!.lane === l && trial!.armed && !finished.current[l] && len > 0
-        : running[l]
+      const laneRunning =
+        !paused &&
+        (isTrial
+          ? trial!.lane === l && trial!.armed && !finished.current[l] && len > 0
+          : running[l])
 
       if (laneRunning) {
         let lap = len > 0 ? dist.current[l] % len : dist.current[l]
@@ -245,8 +254,10 @@ export default function Riders({
 
   return (
     <>
-      {Array.from({ length: NUM_LANES }, (_, l) => {
-        const primitive = <Animal colors={ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]} />
+      {Array.from({ length: track.lanes.length }, (_, l) => {
+        const primitive = (
+          <Animal colors={laneColors?.[l] ?? ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]} />
+        )
         const design = laneDesigns?.[l] ?? null
         const use = use3d && animalUrls.length > 0
         return (

@@ -315,8 +315,12 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
   const lanes: Lane[] = []
   const placements: ObstaclePlacement[] = []
 
-  for (let l = 0; l < NUM_LANES; l++) {
-    const offset = (l - (NUM_LANES - 1) / 2) * LANE_SPACING
+  // The number of lanes follows how many obstacle lists were supplied (one per
+  // animal); fall back to the classic count when none are given.
+  const laneCount = laneObstacles.length || NUM_LANES
+
+  for (let l = 0; l < laneCount; l++) {
+    const offset = (l - (laneCount - 1) / 2) * LANE_SPACING
     const types = laneObstacles[l] ?? []
     const k = types.length
     const obstacles: LaneObstacle[] = types.map((type, j) => {
@@ -357,7 +361,7 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
   const box = new THREE.Box3()
   center.points.forEach((p) => box.expandByPoint(p))
   const boundsCenter = box.getCenter(new THREE.Vector3())
-  const radius = box.getSize(new THREE.Vector3()).length() / 2 + NUM_LANES * LANE_SPACING || 12
+  const radius = box.getSize(new THREE.Vector3()).length() / 2 + laneCount * LANE_SPACING || 12
 
   return { center, lanes, placements, boundsCenter, radius, length }
 }
