@@ -72,14 +72,13 @@ const mk = (kind: 'shape' | 'obstacle', pt: PieceType, lane?: number): Action =>
   lane,
 })
 
-// Default: a long serpentine (with a loop) shared by all lanes, packed with a
-// dense, per-lane obstacle run so the five animals race and diverge.
+// Default: a long serpentine shared by all lanes, packed with a dense, per-lane
+// obstacle run so the five animals race and diverge.
 function defaultShape(): PieceType[] {
   const s: PieceType[] = []
   for (let row = 0; row < 6; row++) {
     for (let i = 0; i < 5; i++) {
       s.push('straight')
-      if (row === 2 && i === 2) s.push('loop') // one Hot Wheels loop
     }
     if (row < 5) {
       const turn: PieceType = row % 2 === 0 ? 'left' : 'right'
