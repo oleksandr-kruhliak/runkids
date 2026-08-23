@@ -21,7 +21,7 @@ interface Action {
 
 const LANE_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
 
-const DEFAULT_CAM: FollowCam = { dist: 3.7, azim: 0.35, elev: 0.4 }
+const DEFAULT_CAM: FollowCam = { dist: 6.76, azim: -0.98, elev: 0.44 }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
 /** A button that repeats its action while held down (touch-friendly). */
