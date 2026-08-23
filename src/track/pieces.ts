@@ -76,13 +76,13 @@ export const OBSTACLE_LEN: Record<PieceType, number> = {
   boost: 7,
   trampoline: 4,
   stopper: 3,
-  spinner: 3,
+  spinner: 4,
   crates: 3,
 }
 
-// Rider speed multiplier while inside an obstacle's zone. Stopper and spinner
-// are handled by their own timed logic (blocking / knock-back), so they don't
-// slow the animal via a flat multiplier.
+// Rider speed multiplier while inside an obstacle's zone. Stopper is handled by
+// its own timed blocking. The spinner slows the animal so it lingers under the
+// hammer long enough to actually get struck (plus its own knock-back logic).
 export const SPEED_MULT: Record<PieceType, number> = {
   straight: 1,
   left: 1,
@@ -96,6 +96,6 @@ export const SPEED_MULT: Record<PieceType, number> = {
   boost: 2.6,
   trampoline: 0.9,
   stopper: 1,
-  spinner: 1,
+  spinner: 0.35,
   crates: 0.8,
 }
