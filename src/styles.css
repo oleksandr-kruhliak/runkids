@@ -615,128 +615,50 @@ body {
 }
 
 /* ---- Time trial: results podium ---- */
+/* The winners' podium is rendered in the 3D scene, so this panel stays out of
+   its way: a compact scoreboard along the bottom. */
 .results-overlay {
   position: absolute;
   inset: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-end;
+  justify-content: flex-end;
   padding: 14px;
-  background: rgba(30, 16, 60, 0.55);
-  backdrop-filter: blur(4px);
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(30, 16, 60, 0.45), rgba(30, 16, 60, 0) 38%);
   z-index: 9;
 }
 
+/* Narrow screens: the scoreboard spans the bottom instead of the corner. */
+@media (max-width: 680px) {
+  .results-overlay {
+    justify-content: center;
+  }
+}
+
 .results-card {
-  width: min(460px, 100%);
-  max-height: 100%;
+  width: min(330px, 100%);
+  max-height: 76%;
   overflow-y: auto;
-  background: linear-gradient(165deg, #fff, #f4eeff);
-  border-radius: 24px;
+  pointer-events: auto;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.97), rgba(244, 238, 255, 0.97));
+  border-radius: 22px;
   box-shadow: 0 18px 50px rgba(20, 8, 50, 0.4);
-  padding: 18px 18px 16px;
+  padding: 14px 16px 14px;
   text-align: center;
+  backdrop-filter: blur(6px);
 }
 
 .results-title {
-  margin: 2px 0 12px;
-  font-size: 26px;
+  margin: 2px 0 10px;
+  font-size: 22px;
   font-weight: 900;
   color: #4a2b8c;
 }
 
-.podium {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 8px;
-}
-
-.podium-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.podium-col.empty {
-  visibility: hidden;
-}
-
-.podium-badge {
-  width: 92px;
-  height: 92px;
-  border-radius: 16px;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 35%, #fbf7ff, #e9ddff);
-  border: 2px solid #e0d2ff;
-}
-
-.podium-col.place-1 .podium-badge {
-  width: 108px;
-  height: 108px;
-  border-color: #ffcf3f;
-  box-shadow: 0 0 0 3px rgba(255, 207, 63, 0.35);
-}
-
-.podium-name {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 800;
-  color: #3a2b5c;
-}
-
-.podium-name .lane-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--lane-color);
-}
-
-.podium-step {
-  width: 100%;
-  border-radius: 12px 12px 6px 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding-top: 8px;
-  color: #fff;
-}
-
-.place-1 .podium-step {
-  height: 92px;
-  background: linear-gradient(#ffd54a, #ffb300);
-}
-
-.place-2 .podium-step {
-  height: 68px;
-  background: linear-gradient(#cfd7e0, #9aa7b5);
-}
-
-.place-3 .podium-step {
-  height: 50px;
-  background: linear-gradient(#e6b891, #cf9161);
-}
-
-.podium-medal {
-  font-size: 26px;
-  line-height: 1;
-}
-
-.podium-time {
-  font-size: 15px;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  margin-top: 2px;
-}
-
 .results-list {
   list-style: none;
-  margin: 14px 0 12px;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -756,7 +678,7 @@ body {
 .results-list .rank-num {
   font-weight: 900;
   color: #7c4dff;
-  width: 18px;
+  width: 24px;
   text-align: center;
 }
 

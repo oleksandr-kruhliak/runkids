@@ -8,14 +8,14 @@ import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
 import { loadLibrary } from './studio/library'
 import Riders, { LeadState } from './track/Riders'
-import AnimalBadge from './track/AnimalBadge'
+import Podium, { PodiumEntry } from './track/Podium'
 import PlaySetup, { PlayConfig } from './PlaySetup'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
 import StoneRoad from './track/StoneRoad'
 import GrassField from './track/GrassField'
-import CameraRig, { FollowCam } from './track/CameraRig'
+import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
 import './styles.css'
 
 interface Action {
@@ -440,6 +440,41 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     }
   }, [track, racerCount])
 
+  // Winners' podium sits just past the finish line, oriented down-track: the
+  // follow-camera parks in front of its target, so the animals face the lens.
+  const podiumSpot = useMemo(() => {
+    const f = sampleCenter(track.center, track.length)
+    const x = new THREE.Vector3().crossVectors(f.up, f.tangent).normalize()
+    const y = new THREE.Vector3().crossVectors(f.tangent, x).normalize()
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, f.tangent))
+    return {
+      pos: f.pos.clone().addScaledVector(f.tangent, 7),
+      quaternion: q,
+      tangent: f.tangent.clone(),
+      up: y,
+      right: x,
+    }
+  }, [track])
+
+  const podiumEntries = useMemo<PodiumEntry[]>(
+    () =>
+      ranking.slice(0, 3).map((r, i) => ({
+        place: i,
+        design: racers[r.lane]?.design ?? null,
+        colors: racers[r.lane]?.colors ?? ANIMAL_PALETTES[r.lane % ANIMAL_PALETTES.length],
+      })),
+    [ranking, racers],
+  )
+
+  // Frame the podium head-on once the results are in.
+  const podiumFocus = useMemo<FocusSpec | null>(
+    () =>
+      trialDone
+        ? { pos: podiumSpot.pos, dir: podiumSpot.tangent, dist: 13, elev: 0.28, lookY: 1.8 }
+        : null,
+    [trialDone, podiumSpot],
+  )
+
   // The quick-play setup screen is the landing view.
   if (mode === 'setup') {
     return <PlaySetup saved={saved} onGenerate={handleGenerate} onAdvanced={() => setMode('build')} />
@@ -543,7 +578,15 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             </group>
           )}
 
-          {track.length > 0 && (
+          {trialDone && podiumEntries.length > 0 && (
+            <Podium
+              position={podiumSpot.pos}
+              quaternion={podiumSpot.quaternion}
+              entries={podiumEntries}
+            />
+          )}
+
+          {track.length > 0 && !trialDone && (
             <Riders
               track={track}
               running={running}
@@ -570,8 +613,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             fitSignal={fitSignal}
             leadRef={leadRef}
             camCtrlRef={camCtrlRef}
+            focus={podiumFocus}
           />
-          <OrbitControls makeDefault enabled={!follow} enableDamping maxPolarAngle={Math.PI / 2.05} />
+          <OrbitControls
+            makeDefault
+            enabled={!follow && !podiumFocus}
+            enableDamping
+            maxPolarAngle={Math.PI / 2.05}
+          />
         </Canvas>
 
         {/* Time-trial: big kid-friendly running timer */}
@@ -634,33 +683,13 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           <div className="results-overlay">
             <Confetti />
             <div className="results-card">
-              <h2 className="results-title">🏆 Winners!</h2>
-              <div className="podium">
-                {[1, 0, 2].map((pos) => {
-                  const r = ranking[pos]
-                  if (!r) return <div key={pos} className="podium-col empty" />
-                  const medal = ['🥇', '🥈', '🥉'][pos]
-                  return (
-                    <div key={pos} className={`podium-col place-${pos + 1}`}>
-                      <div className="podium-badge">
-                        <AnimalBadge design={laneDesignsOut[r.lane]} colors={racers[r.lane]?.colors ?? ANIMAL_PALETTES[0]} />
-                      </div>
-                      <div className="podium-name">
-                        <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
-                        {label(r.lane)}
-                      </div>
-                      <div className="podium-step">
-                        <span className="podium-medal">{medal}</span>
-                        <span className="podium-time">{r.time.toFixed(1)}s</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+              <h2 className="results-title">
+                🏆 {label(ranking[0].lane)} wins!
+              </h2>
               <ol className="results-list">
                 {ranking.map((r, i) => (
                   <li key={r.lane}>
-                    <span className="rank-num">{i + 1}</span>
+                    <span className="rank-num">{['🥇', '🥈', '🥉'][i] ?? i + 1}</span>
                     <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
                     <span className="rank-name">{label(r.lane)}</span>
                     <span className="rank-time">{r.time.toFixed(1)}s</span>

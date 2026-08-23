@@ -9,6 +9,16 @@ export interface FollowCam {
   elev: number // elevation angle (height)
 }
 
+/** An explicit camera framing, used for the winners' podium. */
+export interface FocusSpec {
+  pos: THREE.Vector3
+  /** Direction the subject faces; the camera parks along it, looking back. */
+  dir: THREE.Vector3
+  dist: number
+  elev: number
+  lookY: number
+}
+
 interface CameraRigProps {
   center: THREE.Vector3
   radius: number
@@ -16,6 +26,8 @@ interface CameraRigProps {
   fitSignal: number
   leadRef: MutableRefObject<LeadState>
   camCtrlRef: MutableRefObject<FollowCam>
+  /** When set, overrides fit/follow and frames this subject head-on. */
+  focus?: FocusSpec | null
 }
 
 const ISO_DIR = new THREE.Vector3(0.9, 0.75, 1).normalize()
@@ -30,8 +42,11 @@ export default function CameraRig({
   fitSignal,
   leadRef,
   camCtrlRef,
+  focus,
 }: CameraRigProps) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
+  const focusRef = useRef(focus)
+  focusRef.current = focus
 
   const centerRef = useRef(center)
   const radiusRef = useRef(radius)
@@ -49,6 +64,22 @@ export default function CameraRig({
 
   useFrame((state) => {
     const controls = state.controls as OrbitLike
+
+    // Explicit framing (podium) wins over both follow and fit.
+    const f = focusRef.current
+    if (f) {
+      desired.current
+        .copy(f.pos)
+        .addScaledVector(f.dir, f.dist * Math.cos(f.elev))
+        .addScaledVector(WORLD_UP, f.dist * Math.sin(f.elev))
+      camera.position.lerp(desired.current, 0.12)
+      look.current.copy(f.pos).addScaledVector(WORLD_UP, f.lookY)
+      camera.lookAt(look.current)
+      // Keep any orbiting centred on the subject rather than the old target.
+      if (controls) controls.target.copy(look.current)
+      needFit.current = false
+      return
+    }
 
     if (follow && leadRef.current.active) {
       const lead = leadRef.current
