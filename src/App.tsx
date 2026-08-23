@@ -107,7 +107,7 @@ function defaultActions(): Action[] {
   return a
 }
 
-export default function App() {
+export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const [actions, setActions] = useState<Action[]>(() => defaultActions())
   const [selectedLane, setSelectedLane] = useState(0)
   const [running, setRunning] = useState<boolean[]>(() => Array(NUM_LANES).fill(false))
@@ -240,6 +240,11 @@ export default function App() {
           </div>
         </div>
         <div className="topbar-right">
+          {onOpenStudio && (
+            <button className="mini" onClick={onOpenStudio} title="Build your own cube animals">
+              🐾 Studio
+            </button>
+          )}
           {has3d && (
             <button
               className={`mini ${use3d ? 'on' : ''}`}
