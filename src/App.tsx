@@ -5,6 +5,8 @@ import * as THREE from 'three'
 import { OBSTACLE_PIECES, SHAPE_PIECES, PIECE_META, PieceType } from './track/pieces'
 import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from './track/build'
 import { ANIMAL_PALETTES } from './track/Animal'
+import { AnimalDesign } from './studio/model'
+import { loadLibrary } from './studio/library'
 import Riders, { LeadState } from './track/Riders'
 import Obstacles from './track/Obstacles'
 import StoneRoad from './track/StoneRoad'
@@ -117,6 +119,16 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const [fitSignal, setFitSignal] = useState(0)
   const [use3d, setUse3d] = useState(false)
   const [animalModels, setAnimalModels] = useState<{ name: string; file: string }[]>([])
+  // Custom cube-animals saved in the Studio, and the per-lane pick (design id
+  // or '' for that lane's default racer).
+  const [saved, setSaved] = useState<AnimalDesign[]>(() => loadLibrary())
+  const [laneAnimalIds, setLaneAnimalIds] = useState<string[]>(() => Array(NUM_LANES).fill(''))
+  const refreshSaved = () => setSaved(loadLibrary())
+
+  const laneDesigns = useMemo(
+    () => laneAnimalIds.map((id) => saved.find((d) => d.id === id) ?? null),
+    [laneAnimalIds, saved],
+  )
 
   const { shape, laneObstacles } = useMemo(() => {
     const shape = actions.filter((a) => a.kind === 'shape').map((a) => a.pt)
@@ -329,6 +341,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               use3d={use3d && has3d}
               animalUrls={animalUrls}
               faceY={0}
+              laneDesigns={laneDesigns}
             />
           )}
 
@@ -455,6 +468,40 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 <span className="piece-icon">{PIECE_META[type].icon}</span>
                 <span className="piece-label">{PIECE_META[type].label}</span>
               </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="palette-group">
+          <span className="group-title">
+            Racer animals{' '}
+            <button className="link-btn" onClick={refreshSaved} title="Reload animals saved in the Studio">
+              ↻ refresh ({saved.length})
+            </button>
+          </span>
+          <div className="lanes">
+            {Array.from({ length: NUM_LANES }, (_, l) => (
+              <label
+                key={l}
+                className="racer-pick"
+                style={{ ['--lane-color' as string]: ANIMAL_PALETTES[l].body }}
+              >
+                <span className="lane-dot" />
+                <span className="racer-lane-name">{LANE_NAMES[l]}</span>
+                <select
+                  value={laneAnimalIds[l]}
+                  onChange={(e) =>
+                    setLaneAnimalIds((ids) => ids.map((v, i) => (i === l ? e.target.value : v)))
+                  }
+                >
+                  <option value="">Default</option>
+                  {saved.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ))}
           </div>
         </div>

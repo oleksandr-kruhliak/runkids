@@ -317,6 +317,54 @@ body {
   background: #fff;
 }
 
+.link-btn {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.racer-pick {
+  flex: 1 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #eef1f5;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.racer-pick .lane-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lane-color);
+  flex-shrink: 0;
+}
+
+.racer-lane-name {
+  min-width: 40px;
+}
+
+.racer-pick select {
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 5px 6px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+  color: var(--text);
+  max-width: 120px;
+}
+
 .action-count {
   flex: 1;
   text-align: center;

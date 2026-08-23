@@ -15,6 +15,8 @@ import {
 } from './build'
 import Animal, { ANIMAL_PALETTES } from './Animal'
 import Animal3D from './Animal3D'
+import RaceAnimal from './RaceAnimal'
+import { AnimalDesign } from '../studio/model'
 
 /** Falls back to its `fallback` if the 3D model fails to load. */
 class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
@@ -51,6 +53,8 @@ interface RidersProps {
   animalUrls: string[]
   /** Yaw offset to face 3D models forward along the track. */
   faceY: number
+  /** Per-lane saved cube-animal design; when set, that lane rides it. */
+  laneDesigns?: (AnimalDesign | null)[]
 }
 
 const BASE_SPEED = 8
@@ -71,6 +75,7 @@ export default function Riders({
   use3d,
   animalUrls,
   faceY,
+  laneDesigns,
 }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: NUM_LANES }, () => 0))
@@ -203,6 +208,7 @@ export default function Riders({
     <>
       {Array.from({ length: NUM_LANES }, (_, l) => {
         const primitive = <Animal colors={ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]} />
+        const design = laneDesigns?.[l] ?? null
         const use = use3d && animalUrls.length > 0
         return (
           <group
@@ -212,7 +218,15 @@ export default function Riders({
             }}
             scale={GROUP_SCALE}
           >
-            {use ? (
+            {design ? (
+              <RaceAnimal
+                design={design}
+                laneIndex={l}
+                speedRef={speedRef}
+                faceY={faceY}
+                groundDrop={-RIDE_OFFSET / GROUP_SCALE}
+              />
+            ) : use ? (
               <ModelBoundary fallback={primitive}>
                 <Suspense fallback={null}>
                   <Animal3D
