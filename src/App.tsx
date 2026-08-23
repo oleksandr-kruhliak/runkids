@@ -140,10 +140,31 @@ export default function App() {
   const camCtrlRef = useRef<FollowCam>({ ...DEFAULT_CAM })
 
   const cam = camCtrlRef.current
-  const camZoom = (d: number) => () => (cam.dist = clamp(cam.dist + d, 1.6, 14))
-  const camRotate = (d: number) => () => (cam.azim += d)
-  const camTilt = (d: number) => () => (cam.elev = clamp(cam.elev + d, -0.1, 1.35))
-  const camReset = () => Object.assign(cam, DEFAULT_CAM)
+  const [camView, setCamView] = useState<FollowCam>({ ...DEFAULT_CAM })
+  // Show a live readout of the follow-camera values so the best defaults can be
+  // read off while adjusting. azim is normalized to [-π, π] for readability.
+  const syncCam = () =>
+    setCamView({
+      dist: cam.dist,
+      azim: Math.atan2(Math.sin(cam.azim), Math.cos(cam.azim)),
+      elev: cam.elev,
+    })
+  const camZoom = (d: number) => () => {
+    cam.dist = clamp(cam.dist + d, 1.6, 14)
+    syncCam()
+  }
+  const camRotate = (d: number) => () => {
+    cam.azim += d
+    syncCam()
+  }
+  const camTilt = (d: number) => () => {
+    cam.elev = clamp(cam.elev + d, -0.1, 1.35)
+    syncCam()
+  }
+  const camReset = () => {
+    Object.assign(cam, DEFAULT_CAM)
+    syncCam()
+  }
 
   useEffect(() => {
     const lanes = track.lanes
@@ -346,6 +367,11 @@ export default function App() {
 
         {follow && (
           <div className="cam-controls">
+            <div className="cam-readout">
+              <span>Zoom {camView.dist.toFixed(2)}</span>
+              <span>Rotate {camView.azim.toFixed(2)}</span>
+              <span>Tilt {camView.elev.toFixed(2)}</span>
+            </div>
             <div className="cam-group">
               <span className="cam-label">Zoom</span>
               <HoldButton className="cam-btn" ariaLabel="Zoom in" onStep={camZoom(-0.18)}>
