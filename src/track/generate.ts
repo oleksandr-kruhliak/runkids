@@ -37,9 +37,12 @@ export function generateShape(targetLen: number): PieceType[] {
   return shape
 }
 
-/** Rough number of obstacle slots a track of this length can hold. */
+/**
+ * Rough number of obstacle slots a track of this length can hold. The ceiling
+ * scales with length so the density slider keeps its meaning on long laps.
+ */
 export function obstacleCapacity(targetLen: number): number {
-  return Math.max(1, Math.min(20, Math.round(targetLen / 11)))
+  return Math.max(1, Math.min(45, Math.round(targetLen / 11)))
 }
 
 /**

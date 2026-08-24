@@ -125,7 +125,7 @@ export default function PlaySetup({
             <input
               type="range"
               min={3}
-              max={20}
+              max={60}
               step={1}
               value={avgTime}
               onChange={(e) => setAvgTime(parseInt(e.target.value))}

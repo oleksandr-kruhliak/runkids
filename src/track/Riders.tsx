@@ -68,6 +68,9 @@ interface RidersProps {
 }
 
 const MAX_LANES = 8 // upper bound on racers; ref arrays are sized to this
+// sampleCenter()/laneEffect() wrap at exactly `length`, which would snap a
+// finished animal back to the start line, so park it a hair short of the end.
+const FINISH_EPS = 0.01
 const BASE_SPEED = 8
 const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
 const KNOCK_SPEED = 7 // how fast the hammer flings the animal
@@ -191,7 +194,7 @@ export default function Riders({
           if (trialTimeRef) trialTimeRef.current += dt
           if (dist.current[l] < 0) dist.current[l] = 0
           if (dist.current[l] >= len) {
-            dist.current[l] = len
+            dist.current[l] = len - FINISH_EPS
             finished.current[l] = true
             onFinishRef.current?.(l, trialTimeRef ? trialTimeRef.current : 0)
           }
@@ -204,7 +207,9 @@ export default function Riders({
       }
 
       // Where the animal sits along the course (single lap in a trial).
-      const along = isTrial ? Math.max(0, Math.min(dist.current[l], len)) : dist.current[l]
+      const along = isTrial
+        ? Math.max(0, Math.min(dist.current[l], len - FINISH_EPS))
+        : dist.current[l]
       const f = sampleCenter(track.center, along)
       g.position
         .copy(f.pos)
