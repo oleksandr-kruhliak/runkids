@@ -20,6 +20,7 @@
 //   --keep-ui          Don't hide the corner controls (skips the H key)
 
 import { chromium } from 'playwright-core'
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -109,3 +110,19 @@ if (files.length === 0) {
 renameSync(join(videoDir, files[0]), out)
 rmSync(videoDir, { recursive: true, force: true })
 console.log(`✔ Saved ${out}`)
+
+if (flag('mp4')) {
+  const mp4 = out.replace(/\.webm$/i, '') + '.mp4'
+  const res = spawnSync(
+    'ffmpeg',
+    ['-y', '-i', out, '-c:v', 'libx264', '-crf', '18', '-preset', 'fast', '-pix_fmt', 'yuv420p', mp4],
+    { stdio: ['ignore', 'ignore', 'pipe'] },
+  )
+  if (res.error?.code === 'ENOENT') {
+    console.error('ffmpeg not found — install it with: brew install ffmpeg')
+  } else if (res.status !== 0) {
+    console.error(`ffmpeg failed:\n${res.stderr?.toString().split('\n').slice(-4).join('\n')}`)
+  } else {
+    console.log(`✔ Converted ${mp4}`)
+  }
+}
