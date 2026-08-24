@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
+import { EnvParams, PRESETS, cloneParams } from './env/model'
+import { loadEnvLibrary } from './env/library'
 import './setup.css'
 
 const DEFAULT_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
@@ -12,10 +14,14 @@ export interface Pick {
   colors: AnimalColors
   name: string
 }
+export type RaceMode = 'together' | 'solo'
+
 export interface PlayConfig {
   picks: Pick[]
   avgTime: number
   obstaclePct: number
+  raceMode: RaceMode
+  env: EnvParams
 }
 
 interface Option extends Pick {
@@ -61,6 +67,10 @@ export default function PlaySetup({
   )
   const [avgTime, setAvgTime] = useState(8)
   const [obstaclePct, setObstaclePct] = useState(40)
+  const [raceMode, setRaceMode] = useState<RaceMode>('together')
+  // Environment: built-in seasons plus anything saved in the Env Studio.
+  const savedEnvs = useMemo(() => loadEnvLibrary(), [])
+  const [envKey, setEnvKey] = useState('preset:summer')
 
   const toggle = (key: string) =>
     setSelected((sel) => {
@@ -78,7 +88,10 @@ export default function PlaySetup({
       .map((k) => byKey.get(k))
       .filter((o): o is Option => !!o)
       .map((o) => ({ designId: o.designId, colors: o.colors, name: o.name }))
-    onGenerate({ picks, avgTime, obstaclePct })
+    const preset = PRESETS.find((pr) => `preset:${pr.key}` === envKey)
+    const saved = savedEnvs.find((d) => d.id === envKey)
+    const env = cloneParams(saved?.params ?? preset?.params ?? PRESETS[0].params)
+    onGenerate({ picks, avgTime, obstaclePct, raceMode, env })
   }
 
   return (
@@ -117,6 +130,61 @@ export default function PlaySetup({
             })}
           </div>
           {!canPlay && <p className="setup-hint">Pick at least {MIN_RACERS} racers.</p>}
+        </section>
+
+        <section className="setup-section">
+          <div className="setup-label-row">
+            <span className="setup-label">Race style</span>
+          </div>
+          <div className="mode-row">
+            <button
+              className={`mode-card ${raceMode === 'together' ? 'on' : ''}`}
+              onClick={() => setRaceMode('together')}
+            >
+              <span className="mode-icon">🏆</span>
+              <span className="mode-name">Grand Prix</span>
+              <span className="mode-desc">Everyone races at once</span>
+            </button>
+            <button
+              className={`mode-card ${raceMode === 'solo' ? 'on' : ''}`}
+              onClick={() => setRaceMode('solo')}
+            >
+              <span className="mode-icon">⏱</span>
+              <span className="mode-name">Time Trial</span>
+              <span className="mode-desc">One racer at a time</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="setup-section">
+          <div className="setup-label-row">
+            <span className="setup-label">Environment</span>
+            <button className="link-mini" onClick={() => (window.location.hash = '#/env')}>
+              🌦 Environment builder →
+            </button>
+          </div>
+          <div className="env-row">
+            {PRESETS.map((pr) => (
+              <button
+                key={pr.key}
+                className={`env-chip ${envKey === `preset:${pr.key}` ? 'on' : ''}`}
+                onClick={() => setEnvKey(`preset:${pr.key}`)}
+              >
+                <span>{pr.icon}</span>
+                {pr.label}
+              </button>
+            ))}
+            {savedEnvs.map((d) => (
+              <button
+                key={d.id}
+                className={`env-chip custom ${envKey === d.id ? 'on' : ''}`}
+                onClick={() => setEnvKey(d.id)}
+              >
+                <span>🎨</span>
+                {d.name}
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="setup-section">

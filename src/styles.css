@@ -530,7 +530,7 @@ body {
 }
 
 .trial-time {
-  font-size: 68px;
+  font-size: 54px;
   font-weight: 900;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -570,7 +570,7 @@ body {
 }
 
 .trial-time .unit {
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 800;
   margin-left: 4px;
 }
@@ -820,4 +820,312 @@ body {
     transform: translate3d(var(--drift, 0), 108vh, 0) rotate(var(--rot, 360deg));
     opacity: 0.9;
   }
+}
+
+/* ---- Broadcast overlay: live standings ladder ---- */
+.ladder {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(264px, 44vw);
+  background: rgba(18, 22, 34, 0.78);
+  backdrop-filter: blur(6px);
+  border-radius: 16px;
+  padding: 10px 10px 8px;
+  z-index: 6;
+  box-shadow: 0 8px 26px rgba(10, 15, 30, 0.35);
+}
+
+.ladder-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #cfd8ea;
+  margin: 0 4px 8px;
+}
+
+.ladder-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+
+.ladder-row.live {
+  outline: 2px solid rgba(255, 213, 74, 0.9);
+}
+
+.ladder-row.done {
+  background: rgba(124, 77, 255, 0.28);
+}
+
+.ladder-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.16));
+  border-right: 2px solid rgba(255, 255, 255, 0.35);
+  transition: width 0.2s linear;
+  pointer-events: none;
+}
+
+.ladder-pos {
+  position: relative;
+  width: 20px;
+  text-align: center;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.ladder-row .lane-dot {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lane-color);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  flex: none;
+}
+
+.ladder-name {
+  position: relative;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ladder-val {
+  position: relative;
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: #ffe9a8;
+}
+
+/* ---- Broadcast overlay: pre-race intro card ---- */
+.intro-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(15, 20, 40, 0.25), rgba(15, 20, 40, 0.55));
+  z-index: 9;
+}
+
+.intro-card {
+  width: min(430px, calc(100% - 32px));
+  background: linear-gradient(165deg, #ffffff, #f3ecff);
+  border: 3px solid #7c4dff;
+  border-radius: 26px;
+  box-shadow: 0 24px 60px rgba(20, 10, 60, 0.45);
+  padding: 22px 22px 18px;
+  text-align: center;
+}
+
+.intro-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #7c4dff;
+}
+
+.intro-title {
+  margin: 4px 0 14px;
+  font-size: 30px;
+  color: #24124f;
+}
+
+.intro-racers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.intro-racer {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #fff;
+  border: 2px solid var(--lane-color);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #2a2140;
+}
+
+.intro-racer .intro-num {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lane-color);
+  color: #fff;
+  font-size: 12px;
+}
+
+.intro-racer .lane-dot {
+  display: none;
+}
+
+.intro-question {
+  font-size: 14px;
+  font-weight: 700;
+  color: #5a4a86;
+  margin-bottom: 14px;
+}
+
+.intro-go {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  padding: 14px;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(160deg, #ff8a3c, #ff6a00);
+  box-shadow: 0 8px 22px rgba(255, 106, 0, 0.4);
+  transition: transform 0.1s;
+}
+
+.intro-go:hover {
+  transform: translateY(-1px);
+}
+
+.intro-back {
+  margin-top: 10px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #7c4dff;
+  cursor: pointer;
+}
+
+.results-list .rank-gap {
+  font-size: 12px;
+  font-weight: 700;
+  color: #9a8bc4;
+  font-variant-numeric: tabular-nums;
+  margin-right: 8px;
+}
+
+/* Corner chips shown during immersive play (menu + auto-cam toggle) */
+.play-corner {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 8px;
+  z-index: 7;
+}
+
+.corner-chip {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(18, 22, 34, 0.55);
+  backdrop-filter: blur(6px);
+}
+
+.corner-chip.on {
+  background: #7c4dff;
+  box-shadow: 0 4px 14px rgba(124, 77, 255, 0.45);
+}
+
+/* ---- 16:9 recording frame (immersive play) ---- */
+.app.immersive {
+  background: #000;
+  align-items: center;
+  justify-content: center;
+}
+
+.app.immersive .stage-169 {
+  flex: none;
+  position: relative;
+  width: 100vw;
+  height: calc(100vw * 9 / 16);
+  max-height: 100dvh;
+  max-width: calc(100dvh * 16 / 9);
+}
+
+/* Recording mode: hide every control, keep the broadcast overlay */
+.app.clean .play-corner,
+.app.clean .trial-close,
+.app.clean .results-actions,
+.app.clean .esc-hint {
+  display: none;
+}
+
+.clean-toast {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 22, 34, 0.82);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 8px 16px;
+  z-index: 20;
+  animation: toast-in 0.25s ease-out;
+  pointer-events: none;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.corner-chip.rec {
+  background: #e53935;
+  box-shadow: 0 4px 14px rgba(229, 57, 53, 0.5);
+  animation: rec-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.intro-rec {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  border: 2px solid #e53935;
+  border-radius: 14px;
+  background: #fff;
+  padding: 9px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  color: #e53935;
+  cursor: pointer;
 }

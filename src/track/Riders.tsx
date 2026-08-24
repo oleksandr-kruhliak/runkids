@@ -17,6 +17,59 @@ import Animal3D from './Animal3D'
 import RaceAnimal from './RaceAnimal'
 import { AnimalDesign } from '../studio/model'
 
+/** Rounded-pill name tag rendered to a canvas texture, shown as a sprite. */
+function makeTagTexture(name: string, color: string) {
+  const pad = 26
+  const fontPx = 44
+  const h = 84
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')!
+  ctx.font = `800 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`
+  const textW = Math.ceil(ctx.measureText(name).width)
+  const w = textW + pad * 2
+  canvas.width = w
+  canvas.height = h
+  // pill
+  const r = h / 2
+  ctx.beginPath()
+  ctx.moveTo(r, 0)
+  ctx.arcTo(w, 0, w, h, r)
+  ctx.arcTo(w, h, 0, h, r)
+  ctx.arcTo(0, h, 0, 0, r)
+  ctx.arcTo(0, 0, w, 0, r)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.globalAlpha = 0.92
+  ctx.fill()
+  ctx.globalAlpha = 1
+  ctx.lineWidth = 5
+  ctx.strokeStyle = 'rgba(255,255,255,0.95)'
+  ctx.stroke()
+  // name
+  ctx.font = `800 ${fontPx}px system-ui, -apple-system, "Segoe UI", sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = 7
+  ctx.strokeStyle = 'rgba(20,25,35,0.85)'
+  ctx.strokeText(name, w / 2, h / 2 + 2)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(name, w / 2, h / 2 + 2)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.anisotropy = 4
+  return { texture, aspect: w / h }
+}
+
+function NameTag({ name, color }: { name: string; color: string }) {
+  const { texture, aspect } = useMemo(() => makeTagTexture(name, color), [name, color])
+  useEffect(() => () => texture.dispose(), [texture])
+  const H = 0.62
+  return (
+    <sprite position={[0, 1.8, 0]} scale={[H * aspect, H, 1]} renderOrder={5}>
+      <spriteMaterial map={texture} transparent depthWrite={false} sizeAttenuation />
+    </sprite>
+  )
+}
+
 /** Falls back to its `fallback` if the 3D model fails to load. */
 class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false }
@@ -54,8 +107,9 @@ interface RidersProps {
   faceY: number
   /** Per-lane saved cube-animal design; when set, that lane rides it. */
   laneDesigns?: (AnimalDesign | null)[]
-  /** Time-trial mode: run one lane at a time and time each run. `armed` is
-   * false during the 3-2-1 countdown so the racer waits at the start line. */
+  /** Race mode: `lane` >= 0 runs that lane alone (time trial); `lane` === -1
+   * runs every lane at once (grand prix). `armed` is false during the 3-2-1
+   * countdown so racers wait at the start line. */
   trial?: { active: boolean; lane: number; armed: boolean }
   /** Riders writes the current trial run's elapsed seconds here for display. */
   trialTimeRef?: MutableRefObject<number>
@@ -65,6 +119,10 @@ interface RidersProps {
   paused?: boolean
   /** Per-lane colours for the default (primitive) animal. */
   laneColors?: AnimalColors[]
+  /** Per-lane display names; when `showTags` is true a floating name pill
+   * rides above each animal (broadcast overlay). */
+  names?: string[]
+  showTags?: boolean
 }
 
 const MAX_LANES = 8 // upper bound on racers; ref arrays are sized to this
@@ -95,6 +153,8 @@ export default function Riders({
   onTrialFinish,
   paused,
   laneColors,
+  names,
+  showTags,
 }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
@@ -138,6 +198,16 @@ export default function Riders({
     let leadDist = -Infinity
     const count = track.lanes.length
 
+    const isTrial = !!trial?.active
+    const allMode = isTrial && trial!.lane === -1
+    // Advance the shared race clock while at least one racer is still going.
+    if (isTrial && trial!.armed && !paused && trialTimeRef && len > 0) {
+      const anyLeft = allMode
+        ? track.lanes.some((_, l) => !finished.current[l])
+        : trial!.lane >= 0 && !finished.current[trial!.lane]
+      if (anyLeft) trialTimeRef.current += dt
+    }
+
     for (let l = 0; l < count; l++) {
       const g = groupRefs.current[l]
       const lane = track.lanes[l]
@@ -145,13 +215,12 @@ export default function Riders({
 
       const effect = laneEffect(lane, dist.current[l], len)
 
-      // In a time trial only the current lane runs, once, until it finishes;
-      // in free mode a lane runs while its `running` flag is set (and loops).
-      const isTrial = !!trial?.active
+      // In a trial only the active lane(s) run, once, until they finish; in
+      // free mode a lane runs while its `running` flag is set (and loops).
       const laneRunning =
         !paused &&
         (isTrial
-          ? trial!.lane === l && trial!.armed && !finished.current[l] && len > 0
+          ? trial!.armed && !finished.current[l] && len > 0 && (allMode || trial!.lane === l)
           : running[l])
 
       if (laneRunning) {
@@ -190,8 +259,7 @@ export default function Riders({
         dist.current[l] += v * dt
 
         if (isTrial) {
-          // Time this run, and stop the animal on the finish line after a lap.
-          if (trialTimeRef) trialTimeRef.current += dt
+          // Stop the animal on the finish line after a single lap.
           if (dist.current[l] < 0) dist.current[l] = 0
           if (dist.current[l] >= len) {
             dist.current[l] = len - FINISH_EPS
@@ -231,8 +299,17 @@ export default function Riders({
       if (lapNow < 0) lapNow += len
       distancesRef.current[l] = lapNow
 
-      // Follow target: in a trial, keep the camera on the running animal.
-      const rank = isTrial && trial!.lane === l ? Infinity : dist.current[l]
+      // Follow target: solo trial pins the camera on the running animal; in a
+      // grand prix the camera tracks the front runner still racing.
+      const rank = isTrial
+        ? allMode
+          ? finished.current[l]
+            ? dist.current[l] - 1e9
+            : dist.current[l]
+          : trial!.lane === l
+            ? Infinity
+            : dist.current[l]
+        : dist.current[l]
       if (rank > leadDist) {
         leadDist = rank
         leadIdx = l
@@ -295,6 +372,12 @@ export default function Riders({
               </ModelBoundary>
             ) : (
               primitive
+            )}
+            {showTags && names?.[l] && (
+              <NameTag
+                name={names[l]}
+                color={(laneColors?.[l] ?? ANIMAL_PALETTES[l % ANIMAL_PALETTES.length]).body}
+              />
             )}
           </group>
         )

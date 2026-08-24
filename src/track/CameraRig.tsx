@@ -28,7 +28,26 @@ interface CameraRigProps {
   camCtrlRef: MutableRefObject<FollowCam>
   /** When set, overrides fit/follow and frames this subject head-on. */
   focus?: FocusSpec | null
+  /** Auto-director: cycle broadcast-style shots (cuts) while following. */
+  director?: boolean
 }
+
+// Broadcast shot list for the auto-director. Orbit shots reuse the follow-cam
+// math; 'trackside' parks a fixed camera ahead of the runner and pans as the
+// pack races past. Each cut holds for `dur` seconds.
+type Shot =
+  | { kind: 'orbit'; dist: number; azim: number; elev: number; dur: number }
+  | { kind: 'trackside'; dur: number }
+
+const SHOTS: Shot[] = [
+  { kind: 'orbit', dist: 6.76, azim: -0.98, elev: 0.44, dur: 6 }, // hero chase
+  { kind: 'trackside', dur: 4.5 },
+  { kind: 'orbit', dist: 4.6, azim: 0.14, elev: 0.2, dur: 4.5 }, // face close-up
+  { kind: 'orbit', dist: 8.5, azim: 1.45, elev: 0.32, dur: 5 }, // side profile
+  { kind: 'trackside', dur: 4.5 },
+  { kind: 'orbit', dist: 12.5, azim: -2.1, elev: 1.0, dur: 5.5 }, // high drone
+  { kind: 'orbit', dist: 7.2, azim: 2.95, elev: 0.14, dur: 5 }, // low behind
+]
 
 const ISO_DIR = new THREE.Vector3(0.9, 0.75, 1).normalize()
 const WORLD_UP = new THREE.Vector3(0, 1, 0)
@@ -43,6 +62,7 @@ export default function CameraRig({
   leadRef,
   camCtrlRef,
   focus,
+  director,
 }: CameraRigProps) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const focusRef = useRef(focus)
@@ -62,6 +82,22 @@ export default function CameraRig({
   const desired = useRef(new THREE.Vector3())
   const look = useRef(new THREE.Vector3())
 
+  // Auto-director state: current shot, when to cut, and the parked position
+  // for trackside shots. `side` alternates which side of the track we park on.
+  const shotIdx = useRef(0)
+  const shotUntil = useRef(-1)
+  const shotPos = useRef(new THREE.Vector3())
+  const shotSide = useRef(1)
+  const directorRef = useRef(!!director)
+  useEffect(() => {
+    // (Re)start the shot sequence whenever the director toggles on.
+    if (director && !directorRef.current) {
+      shotIdx.current = 0
+      shotUntil.current = -1
+    }
+    directorRef.current = !!director
+  }, [director])
+
   useFrame((state) => {
     const controls = state.controls as OrbitLike
 
@@ -77,6 +113,46 @@ export default function CameraRig({
       camera.lookAt(look.current)
       // Keep any orbiting centred on the subject rather than the old target.
       if (controls) controls.target.copy(look.current)
+      needFit.current = false
+      return
+    }
+
+    if (follow && leadRef.current.active && directorRef.current) {
+      const lead = leadRef.current
+      const t = state.clock.elapsedTime
+      let cut = false
+      if (t > shotUntil.current) {
+        // Next shot in the rotation — a hard cut, not a glide.
+        if (shotUntil.current >= 0) shotIdx.current = (shotIdx.current + 1) % SHOTS.length
+        const shot = SHOTS[shotIdx.current]
+        shotUntil.current = t + shot.dur
+        cut = true
+        if (shot.kind === 'trackside') {
+          // Park ahead of the runner, off to one (alternating) side.
+          shotSide.current = -shotSide.current
+          shotPos.current
+            .copy(lead.pos)
+            .addScaledVector(lead.tangent, 15)
+            .addScaledVector(lead.right, 8.5 * shotSide.current)
+            .addScaledVector(WORLD_UP, 2.6)
+        }
+      }
+      const shot = SHOTS[shotIdx.current]
+      if (shot.kind === 'trackside') {
+        desired.current.copy(shotPos.current)
+      } else {
+        const horiz = shot.dist * Math.cos(shot.elev)
+        const vert = shot.dist * Math.sin(shot.elev)
+        desired.current
+          .copy(lead.pos)
+          .addScaledVector(lead.tangent, Math.cos(shot.azim) * horiz)
+          .addScaledVector(lead.right, Math.sin(shot.azim) * horiz)
+          .addScaledVector(WORLD_UP, vert)
+      }
+      if (cut) camera.position.copy(desired.current)
+      else camera.position.lerp(desired.current, shot.kind === 'trackside' ? 1 : 0.14)
+      look.current.copy(lead.pos).addScaledVector(WORLD_UP, 0.45)
+      camera.lookAt(look.current)
       needFit.current = false
       return
     }

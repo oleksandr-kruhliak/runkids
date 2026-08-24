@@ -33,7 +33,13 @@ const CLIP_META: Record<Clip, { icon: string; label: string }> = {
 const AXES: Array<0 | 1 | 2> = [0, 1, 2]
 const AXIS_LABEL = ['X', 'Y', 'Z']
 
-export default function AnimalStudio({ onExit }: { onExit: () => void }) {
+export default function AnimalStudio({
+  onExit,
+  onOpenEnv,
+}: {
+  onExit: () => void
+  onOpenEnv?: () => void
+}) {
   const { state: design, commit, undo, redo, load, canUndo, canRedo } =
     useHistory<AnimalDesign>(() => starterFox())
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -136,18 +142,39 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
     load(d)
     setSelectedId(null)
   }
+  // Import one or many .animal.json files. A single file opens in the editor
+  // (as before); a batch is saved straight into the library.
   const onImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    importDesignFile(file)
-      .then((d) => {
-        load(d)
-        setSelectedId(null)
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
+    if (fileInput.current) fileInput.current.value = ''
+
+    if (files.length === 1) {
+      importDesignFile(files[0])
+        .then((d) => {
+          load(d)
+          setSelectedId(null)
+        })
+        .catch((err) => alert(err.message))
+      return
+    }
+
+    Promise.allSettled(files.map((f) => importDesignFile(f))).then((results) => {
+      const ok: AnimalDesign[] = []
+      const failed: string[] = []
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') ok.push(r.value)
+        else failed.push(files[i].name)
       })
-      .catch((err) => alert(err.message))
-      .finally(() => {
-        if (fileInput.current) fileInput.current.value = ''
-      })
+      if (ok.length > 0) {
+        // Designs with a matching id update their existing library entry.
+        setLibrary((lib) => ok.reduce((l, d) => upsertDesign(l, d), lib))
+        setShowLibrary(true)
+      }
+      const parts = [`Imported ${ok.length} of ${files.length} animals to the library.`]
+      if (failed.length > 0) parts.push(`Could not read: ${failed.join(', ')}`)
+      alert(parts.join('\n'))
+    })
   }
 
   return (
@@ -156,6 +183,11 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
         <button className="mini" onClick={onExit} title="Back to the race builder">
           ← Race
         </button>
+        {onOpenEnv && (
+          <button className="mini" onClick={onOpenEnv} title="Environment builder">
+            🌦 Env
+          </button>
+        )}
         <div className="studio-title">
           <span className="logo">🐾</span>
           <input
@@ -184,7 +216,7 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
           <button className="mini" onClick={() => exportDesign(design)} title="Download as JSON">
             ⬇︎
           </button>
-          <button className="mini" onClick={() => fileInput.current?.click()} title="Import JSON">
+          <button className="mini" onClick={() => fileInput.current?.click()} title="Import JSON (select several for a batch)">
             ⬆︎
           </button>
           <button
@@ -198,6 +230,7 @@ export default function AnimalStudio({ onExit }: { onExit: () => void }) {
             ref={fileInput}
             type="file"
             accept=".json,application/json"
+            multiple
             onChange={onImport}
             style={{ display: 'none' }}
           />

@@ -14,9 +14,8 @@ const MAX_HALF = 58 // cap on the field half-size
 const CORRIDOR = ((NUM_LANES - 1) / 2) * LANE_SPACING + 0.2
 const KEEP = 0.55 // fraction of each patch's blades kept (thins it for density)
 
-// Bright greens for the grass (the model's own greens are dark/olive).
-const GRASS_LIGHT = new THREE.Color('#83e05a')
-const GRASS_DARK = new THREE.Color('#5fbf3c')
+// Default bright green for the grass (the model's own greens are dark/olive).
+export const GRASS_DEFAULT = '#83e05a'
 
 // Deterministic pseudo-random so tufts don't jump between renders.
 function rnd(n: number) {
@@ -25,7 +24,9 @@ function rnd(n: number) {
 }
 
 /** Merge the grass model's two greens into one vertex-colored tile, thinned. */
-function buildGrassGeometry(scene: THREE.Object3D): THREE.BufferGeometry {
+function buildGrassGeometry(scene: THREE.Object3D, colorHex: string): THREE.BufferGeometry {
+  const light = new THREE.Color(colorHex)
+  const dark = light.clone().multiplyScalar(0.74)
   scene.updateMatrixWorld(true)
   const parts: THREE.BufferGeometry[] = []
   scene.traverse((o) => {
@@ -33,9 +34,9 @@ function buildGrassGeometry(scene: THREE.Object3D): THREE.BufferGeometry {
     if (!mesh.isMesh) return
     const g = mesh.geometry.clone()
     g.applyMatrix4(mesh.matrixWorld)
-    // The model has two greens; map them to bright greens for a fresher field.
+    // The model has two greens; map them to the environment's grass colour.
     const name = (mesh.material as THREE.Material)?.name ?? ''
-    const c = /10/.test(name) ? GRASS_DARK : GRASS_LIGHT
+    const c = /10/.test(name) ? dark : light
     const n = g.attributes.position.count
     const colors = new Float32Array(n * 3)
     for (let i = 0; i < n; i++) {
@@ -84,9 +85,12 @@ function decimate(geo: THREE.BufferGeometry, keep: number): THREE.BufferGeometry
  * and slightly onto the road edges so the road blends into the green. The flat
  * green ground shows between tufts.
  */
-export default function GrassField({ track }: { track: Track }) {
+export default function GrassField({ track, color = GRASS_DEFAULT }: { track: Track; color?: string }) {
   const gltf = useGLTF(GRASS_URL)
-  const geometry = useMemo(() => buildGrassGeometry(gltf.scene as THREE.Object3D), [gltf.scene])
+  const geometry = useMemo(
+    () => buildGrassGeometry(gltf.scene as THREE.Object3D, color),
+    [gltf.scene, color],
+  )
 
   const { instances, count } = useMemo(() => {
     const mats: THREE.Matrix4[] = []

@@ -9,12 +9,17 @@ import { AnimalDesign } from './studio/model'
 import { loadLibrary } from './studio/library'
 import Riders, { LeadState } from './track/Riders'
 import Podium, { PodiumEntry } from './track/Podium'
-import PlaySetup, { PlayConfig } from './PlaySetup'
+import PlaySetup, { PlayConfig, RaceMode } from './PlaySetup'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
 import StoneRoad from './track/StoneRoad'
 import GrassField from './track/GrassField'
+import Sky from './track/Sky'
+import Particles from './env/Particles'
+import Scenery from './env/Scenery'
+import { EnvParams, SUMMER, cloneParams } from './env/model'
+import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
 import './styles.css'
 
@@ -261,7 +266,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
   // ---- Time trial: run one animal at a time, timed, then show a podium ----
   const [trialActive, setTrialActive] = useState(false)
-  const [trialLane, setTrialLane] = useState(-1) // lane currently running, -1 = none
+  // 'solo' runs one racer at a time; 'together' is a grand prix (all at once).
+  const [trialMode, setTrialMode] = useState<RaceMode>('solo')
+  const [trialLane, setTrialLane] = useState(-1) // lane currently running, -1 = none / everyone
   const [trialTimes, setTrialTimes] = useState<(number | null)[]>(() => Array(NUM_LANES).fill(null))
   const [trialDone, setTrialDone] = useState(false)
   const [displayTime, setDisplayTime] = useState(0)
@@ -273,6 +280,50 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
   const [paused, setPaused] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Pre-race intro card (racer lineup); the race starts from its button.
+  const [introOpen, setIntroOpen] = useState(false)
+  // Auto-director: broadcast-style camera cuts during quick-play races.
+  const [director, setDirector] = useState(true)
+  // Active environment (season) skinning the whole race scene.
+  const [env, setEnv] = useState<EnvParams>(() => cloneParams(SUMMER))
+  // Recording mode: hide every control except the broadcast overlay (H key).
+  const [clean, setClean] = useState(false)
+  const cleanRef = useRef(clean)
+  cleanRef.current = clean
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showToast = (msg: string) => {
+    setToastMsg(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToastMsg(null), 2600)
+  }
+
+  // In-app tab recording (⏺ button / R key): saves a .webm when stopped.
+  const recSupported = useMemo(() => isRecordingSupported(), [])
+  const [recording, setRecording] = useState(false)
+  const stopRecRef = useRef<(() => void) | null>(null)
+  const startRecording = async () => {
+    try {
+      const stop = await startTabRecording((blob) => {
+        downloadRecording(blob)
+        stopRecRef.current = null
+        setRecording(false)
+        showToast('🎬 Video saved to your downloads')
+      })
+      stopRecRef.current = stop
+      setRecording(true)
+      setClean(true) // hide controls so they stay out of the video
+      showToast('⏺ Recording — press R to stop')
+    } catch {
+      showToast('Recording was cancelled')
+    }
+  }
+  const toggleRecording = () => {
+    if (stopRecRef.current) stopRecRef.current()
+    else startRecording()
+  }
+  const toggleRecordingRef = useRef(toggleRecording)
+  toggleRecordingRef.current = toggleRecording
 
   const trialProp = useMemo(
     () => ({ active: trialActive, lane: trialLane, armed }),
@@ -286,12 +337,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     cdTimer.current = null
   }
 
-  // Bring a racer to the line, run a 3-2-1-GO! countdown, then let it go.
-  const startRacer = (lane: number) => {
-    setTrialLane(lane)
+  // Run a 3-2-1-GO! countdown, then fire `onGo`.
+  const runCountdown = (onGo: () => void) => {
     setArmed(false)
-    trialTimeRef.current = 0
-    setDisplayTime(0)
     let n = 3
     setCountdown(3)
     const tick = () => {
@@ -301,14 +349,31 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         cdTimer.current = setTimeout(tick, 700)
       } else {
         setCountdown(null)
-        setArmed(true) // GO — the racer starts and the clock runs
+        onGo() // GO — racing starts and the clock runs
       }
     }
     cdTimer.current = setTimeout(tick, 700)
   }
 
-  const startTrial = (count = racerCount) => {
+  // Bring a racer to the line, count down, then let it go (time trial).
+  const startRacer = (lane: number) => {
+    setTrialLane(lane)
+    trialTimeRef.current = 0
+    setDisplayTime(0)
+    runCountdown(() => setArmed(true))
+  }
+
+  // Line everyone up, count down, then release the whole field (grand prix).
+  const startAllRacers = () => {
+    setTrialLane(-1)
+    trialTimeRef.current = 0
+    setDisplayTime(0)
+    runCountdown(() => setArmed(true))
+  }
+
+  const startTrial = (count = racerCount, mode: RaceMode = trialMode) => {
     clearTimers()
+    setTrialMode(mode)
     setPaused(false)
     setMenuOpen(false)
     setRunning(Array(NUM_LANES).fill(false))
@@ -317,8 +382,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setTrialDone(false)
     setTrialActive(true)
     setFollow(true)
-    setFollowTarget(-1) // follow whoever is running
-    startRacer(0)
+    setFollowTarget(-1) // follow whoever is running / leading
+    if (mode === 'together') startAllRacers()
+    else startRacer(0)
   }
 
   const exitTrial = () => {
@@ -334,13 +400,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setResetSignal((n) => n + 1)
   }
 
-  // Called from Riders when the running animal crosses the finish.
+  // Called from Riders when an animal crosses the finish.
   const onTrialFinish = (lane: number, time: number) => {
     setTrialTimes((prev) => {
       const n = [...prev]
       n[lane] = time
       return n
     })
+    if (trialMode === 'together') return // everyone keeps racing to the line
     setArmed(false)
     setTrialLane(-1) // brief pause on the finish line before the next racer
     clearTimers()
@@ -356,6 +423,21 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     }, 1100)
   }
 
+  // Grand prix: once every racer has crossed the line, show the podium.
+  useEffect(() => {
+    if (!trialActive || trialDone || trialMode !== 'together') return
+    if (trialTimes.length === 0 || !trialTimes.every((t) => t != null)) return
+    gapTimer.current = setTimeout(() => {
+      setArmed(false)
+      setTrialDone(true)
+      setFollow(false)
+      setFitSignal((n) => n + 1)
+    }, 1300)
+    return () => {
+      if (gapTimer.current) clearTimeout(gapTimer.current)
+    }
+  }, [trialActive, trialDone, trialMode, trialTimes])
+
   useEffect(() => clearTimers, [])
 
   // ---- Quick play: generate a course from the setup screen and auto-run ----
@@ -366,11 +448,18 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setPicks(config.picks)
     setGenerated({ shape, laneObstacles })
     setMode('play')
-    // Kick off the trial once the generated track is in place.
-    startTrial(config.picks.length)
+    setTrialMode(config.raceMode)
+    setEnv(cloneParams(config.env))
+    // Show the starting-line intro; the race starts from its button.
+    setResetSignal((n) => n + 1)
+    setFollow(false)
+    setIntroOpen(true)
+    setFitSignal((n) => n + 1)
   }
 
   const backToSetup = () => {
+    setIntroOpen(false)
+    setClean(false)
     exitTrial()
     setGenerated(null)
     setMode('setup')
@@ -395,6 +484,12 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       if (e.key === 'Escape') {
         e.preventDefault()
         togglePauseMenu()
+      } else if (e.key === 'h' || e.key === 'H') {
+        const next = !cleanRef.current
+        setClean(next)
+        showToast(next ? 'Recording mode — press H to show controls' : 'Controls shown — press H to hide')
+      } else if (e.key === 'r' || e.key === 'R') {
+        toggleRecordingRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -403,7 +498,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
   // Live-update the big timer while an animal is running.
   useEffect(() => {
-    if (!trialActive || trialLane < 0) return
+    if (!trialActive || trialDone) return
+    if (trialMode === 'solo' && trialLane < 0) return
     let raf = 0
     const tick = () => {
       const v = Math.round(trialTimeRef.current * 10) / 10
@@ -412,7 +508,43 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [trialActive, trialLane])
+  }, [trialActive, trialLane, trialMode, trialDone])
+
+  // Live standings ladder: finished racers ranked by time, then everyone else
+  // by how far along the course they are. Polled from the sim's distance refs.
+  interface LadderRow {
+    lane: number
+    pct: number
+    time: number | null
+  }
+  const [ladder, setLadder] = useState<LadderRow[]>([])
+  const trialTimesRef = useRef(trialTimes)
+  trialTimesRef.current = trialTimes
+  useEffect(() => {
+    if (!trialActive || trialDone) {
+      setLadder([])
+      return
+    }
+    const len = track.length || 1
+    const compute = () => {
+      const times = trialTimesRef.current
+      const rows: LadderRow[] = Array.from({ length: racerCount }, (_, lane) => ({
+        lane,
+        pct: Math.max(0, Math.min(100, (distancesRef.current[lane] / len) * 100)),
+        time: times[lane] ?? null,
+      }))
+      rows.sort((a, b) => {
+        if (a.time != null && b.time != null) return a.time - b.time
+        if (a.time != null) return -1
+        if (b.time != null) return 1
+        return b.pct - a.pct
+      })
+      setLadder(rows)
+    }
+    compute()
+    const id = setInterval(compute, 200)
+    return () => clearInterval(id)
+  }, [trialActive, trialDone, racerCount, track.length])
 
   // Ranking (fastest first) once every racer has a time.
   const ranking = useMemo(
@@ -425,6 +557,15 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   )
 
   const trialRunningCount = trialTimes.filter((t) => t != null).length
+
+  // Faint field grid lines tinted from the environment's ground colour.
+  const gridColors = useMemo(
+    () => ({
+      cell: `#${new THREE.Color(env.ground).multiplyScalar(0.92).getHexString()}`,
+      section: `#${new THREE.Color(env.ground).multiplyScalar(0.82).getHexString()}`,
+    }),
+    [env.ground],
+  )
 
   // Start/finish gate spanning all lanes, oriented to the track start.
   const gate = useMemo(() => {
@@ -466,6 +607,20 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     [ranking, racers],
   )
 
+  // While the intro card is up, frame the starting line so the racers are in
+  // shot behind the card.
+  const introFocus = useMemo<FocusSpec | null>(() => {
+    if (!introOpen || track.length === 0) return null
+    const f = sampleCenter(track.center, 0)
+    return {
+      pos: f.pos.clone(),
+      dir: f.tangent.clone(),
+      dist: 12,
+      elev: 0.34,
+      lookY: 0.6,
+    }
+  }, [introOpen, track])
+
   // Frame the podium head-on once the results are in.
   const podiumFocus = useMemo<FocusSpec | null>(
     () =>
@@ -485,7 +640,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const laneColorsOut = racers.map((r) => r.colors)
 
   return (
-    <div className={`app ${playing ? 'immersive' : ''}`}>
+    <div className={`app ${playing ? 'immersive' : ''} ${clean ? 'clean' : ''}`}>
       {!playing && (
       <header className="topbar">
         <div className="brand">
@@ -527,14 +682,15 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       </header>
       )}
 
-      <div className="stage">
+      <div className={playing ? 'stage stage-169' : 'stage'}>
         <Canvas shadows camera={{ position: [26, 20, 30], fov: 50 }} dpr={[1, 2]}>
-          <color attach="background" args={['#dfeffb']} />
-          <fog attach="fog" args={['#dfeffb', 70, 220]} />
+          <color attach="background" args={[env.sky.horizon]} />
+          <fog attach="fog" args={[env.sky.horizon, 70, 220]} />
+          <Sky zenith={env.sky.zenith} mid={env.sky.mid} horizon={env.sky.horizon} clouds={env.clouds} />
           <hemisphereLight args={['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
             position={[24, 34, 14]}
-            intensity={1.5}
+            intensity={env.sun}
             castShadow
             shadow-mapSize={[2048, 2048]}
             shadow-camera-left={-90}
@@ -545,18 +701,19 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
             <planeGeometry args={[1000, 1000]} />
-            <meshStandardMaterial color="#7ed957" />
+            <meshStandardMaterial color={env.ground} />
           </mesh>
           <Grid
             args={[1000, 1000]}
             cellSize={2}
-            cellColor="#74cc4e"
+            cellColor={gridColors.cell}
             sectionSize={10}
-            sectionColor="#5fb83c"
+            sectionColor={gridColors.section}
             fadeDistance={180}
           />
 
-          <GrassField track={track} />
+          <GrassField track={track} color={env.grass} />
+          <Scenery track={track} env={env} />
           <StoneRoad track={track} />
 
           <Obstacles placements={track.placements} distancesRef={distancesRef} length={track.length} />
@@ -603,8 +760,17 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               trialTimeRef={trialTimeRef}
               onTrialFinish={onTrialFinish}
               paused={paused}
+              names={racers.map((r) => r.name)}
+              showTags={playing && !introOpen}
             />
           )}
+
+          <Particles
+            kind={env.particles}
+            density={env.particleDensity}
+            center={track.boundsCenter}
+            radius={track.radius + 18}
+          />
 
           <CameraRig
             center={track.boundsCenter}
@@ -613,23 +779,45 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             fitSignal={fitSignal}
             leadRef={leadRef}
             camCtrlRef={camCtrlRef}
-            focus={podiumFocus}
+            focus={podiumFocus ?? introFocus}
+            director={director && playing}
           />
           <OrbitControls
             makeDefault
-            enabled={!follow && !podiumFocus}
+            enabled={!follow && !podiumFocus && !introFocus}
             enableDamping
             maxPolarAngle={Math.PI / 2.05}
           />
         </Canvas>
 
         {/* Time-trial: big kid-friendly running timer */}
-        {trialActive && !trialDone && (
+        {trialActive && !trialDone && !introOpen && (
           <div className="trial-hud">
             <button className="trial-close" onClick={exitTrial} aria-label="Stop time trial">
               ✕
             </button>
-            {countdown !== null && trialLane >= 0 ? (
+            {trialMode === 'together' ? (
+              countdown !== null ? (
+                <>
+                  <div className="trial-now">🏁 Get ready, everyone!</div>
+                  <div key={countdown} className={`trial-count ${countdown === 0 ? 'go' : ''}`}>
+                    {countdown === 0 ? 'GO!' : countdown}
+                  </div>
+                  <div className="trial-progress">{racerCount} racers on the line</div>
+                </>
+              ) : (
+                <>
+                  <div className="trial-now">🏁 Grand Prix!</div>
+                  <div className="trial-time">
+                    {displayTime.toFixed(1)}
+                    <span className="unit">s</span>
+                  </div>
+                  <div className="trial-progress">
+                    {trialRunningCount} of {racerCount} finished
+                  </div>
+                </>
+              )
+            ) : countdown !== null && trialLane >= 0 ? (
               <>
                 <div className="trial-now">
                   <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(trialLane)}} />
@@ -664,17 +852,77 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 </div>
               </>
             )}
-            {ranking.length > 0 && (
-              <div className="trial-splits">
-                {ranking.map((r, i) => (
-                  <span key={r.lane} className="split">
-                    <b>{i + 1}.</b>
-                    <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
-                    {label(r.lane)} · {r.time.toFixed(1)}s
-                  </span>
+          </div>
+        )}
+
+        {/* Broadcast overlay: live standings ladder */}
+        {trialActive && !trialDone && !introOpen && ladder.length > 0 && (
+          <div className="ladder">
+            <div className="ladder-title">{trialMode === 'together' ? '🏁 Positions' : '⏱ Times'}</div>
+            {ladder.map((row, i) => (
+              <div
+                key={row.lane}
+                className={`ladder-row ${row.time != null ? 'done' : ''} ${
+                  trialMode === 'solo' && trialLane === row.lane ? 'live' : ''
+                }`}
+                style={{ ['--lane-color' as string]: laneHex(row.lane) }}
+              >
+                <span className="ladder-bar" style={{ width: `${row.pct}%` }} />
+                <span className="ladder-pos">{row.time != null ? ['🥇', '🥈', '🥉'][i] ?? i + 1 : i + 1}</span>
+                <span className="lane-dot" />
+                <span className="ladder-name">{label(row.lane)}</span>
+                <span className="ladder-val">
+                  {row.time != null
+                    ? `${row.time.toFixed(1)}s`
+                    : trialMode === 'together' || trialLane === row.lane
+                      ? `${Math.round(row.pct)}%`
+                      : '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Broadcast overlay: pre-race intro / lineup card */}
+        {playing && introOpen && (
+          <div className="intro-overlay">
+            <div className="intro-card">
+              <div className="intro-kicker">Today's race</div>
+              <h2 className="intro-title">
+                {trialMode === 'together' ? '🏆 Grand Prix' : '⏱ Time Trial'}
+              </h2>
+              <div className="intro-racers">
+                {racers.map((r, i) => (
+                  <div
+                    key={i}
+                    className="intro-racer"
+                    style={{ ['--lane-color' as string]: r.colors.body }}
+                  >
+                    <span className="intro-num">{i + 1}</span>
+                    <span className="lane-dot" />
+                    <span className="intro-name">{r.name}</span>
+                  </div>
                 ))}
               </div>
-            )}
+              <div className="intro-question">Who will win? Leave your guess in the comments! 👇</div>
+              <button
+                className="intro-go"
+                onClick={() => {
+                  setIntroOpen(false)
+                  startTrial()
+                }}
+              >
+                🏁 Start the race!
+              </button>
+              {recSupported && (
+                <button className="intro-rec" onClick={toggleRecording}>
+                  {recording ? '⏺ Recording… press R to stop' : '⏺ Record this race to a video'}
+                </button>
+              )}
+              <button className="intro-back" onClick={backToSetup}>
+                ← Back to setup
+              </button>
+            </div>
           </div>
         )}
 
@@ -692,6 +940,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                     <span className="rank-num">{['🥇', '🥈', '🥉'][i] ?? i + 1}</span>
                     <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
                     <span className="rank-name">{label(r.lane)}</span>
+                    {i > 0 && <span className="rank-gap">+{(r.time - ranking[0].time).toFixed(1)}s</span>}
                     <span className="rank-time">{r.time.toFixed(1)}s</span>
                   </li>
                 ))}
@@ -723,8 +972,27 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </div>
         )}
 
-        {playing && !menuOpen && !trialDone && (
-          <button className="esc-hint" onClick={togglePauseMenu}>⏸ Menu (Esc)</button>
+        {playing && toastMsg && <div className="clean-toast">{toastMsg}</div>}
+        {playing && !menuOpen && !trialDone && !introOpen && (
+          <div className="play-corner">
+            {recSupported && (
+              <button
+                className={`corner-chip ${recording ? 'rec' : ''}`}
+                onClick={toggleRecording}
+                title="Record the race to a video file"
+              >
+                {recording ? '■ Stop rec' : '⏺ Record'}
+              </button>
+            )}
+            <button
+              className={`corner-chip ${director ? 'on' : ''}`}
+              onClick={() => setDirector((d) => !d)}
+              title="Cinematic camera cuts"
+            >
+              🎬 Auto cam
+            </button>
+            <button className="corner-chip" onClick={togglePauseMenu}>⏸ Menu (Esc)</button>
+          </div>
         )}
 
         {follow && !playing && (
@@ -907,10 +1175,17 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </button>
           <button
             className="action trial"
-            onClick={() => startTrial()}
+            onClick={() => startTrial(racerCount, 'solo')}
             disabled={track.length === 0 || trialActive}
           >
             ⏱ Time Trial
+          </button>
+          <button
+            className="action trial"
+            onClick={() => startTrial(racerCount, 'together')}
+            disabled={track.length === 0 || trialActive}
+          >
+            🏆 Grand Prix
           </button>
           <button
             className={`action play ${anyRunning ? 'on' : ''}`}
