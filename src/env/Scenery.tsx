@@ -407,7 +407,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     const cz = track.boundsCenter.z
     const half = Math.min(track.radius + REACH, MAX_HALF)
     const areaScale = Math.max(0.5, Math.min(2, (half * half) / 1600))
-    const count = Math.min(170, Math.round(density * 1.5 * areaScale))
+    const count = Math.min(140, Math.round(density * 1.1 * areaScale))
     const pts = track.center.points
 
     const spots = scatterSpots(count, half, cx, cz, pts, CORRIDOR + 2, 1000)
@@ -472,7 +472,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     }
 
     // Backdrop ring: big landmarks beyond the field so the horizon feels full.
-    const ringCount = Math.round(16 * Math.max(0.7, areaScale))
+    const ringCount = Math.round(14 * Math.max(0.7, areaScale))
     for (let i = 0; i < ringCount; i++) {
       const a = (i / ringCount) * Math.PI * 2 + rnd(i + 77) * 0.5
       const rr = half * (0.95 + rnd(i + 88) * 0.3)
