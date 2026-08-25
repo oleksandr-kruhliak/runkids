@@ -11,7 +11,12 @@ export function loadLibrary(): AnimalDesign[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed.map(coerceDesign).filter(Boolean) as AnimalDesign[]
+    const list = parsed.map(coerceDesign).filter(Boolean) as AnimalDesign[]
+    // Bundled pack animals are served from the app itself; any pack-* entry
+    // in storage is a stale import that would shadow the current version.
+    const cleaned = list.filter((d) => !d.id.startsWith('pack-'))
+    if (cleaned.length !== list.length) saveLibrary(cleaned)
+    return cleaned
   } catch {
     return []
   }

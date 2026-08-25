@@ -138,7 +138,16 @@ export default function AnimalStudio({
   }, [undo, redo])
 
   // ---- library actions ----
-  const save = () => setLibrary((lib) => upsertDesign(lib, design))
+  const save = () => {
+    // Built-ins are immutable; saving one forks it into the user's own copy.
+    if (design.id.startsWith('pack-')) {
+      const copy = { ...cloneDesign(design), name: `${design.name} (my version)` }
+      load(copy)
+      setLibrary((lib) => upsertDesign(lib, copy))
+      return
+    }
+    setLibrary((lib) => upsertDesign(lib, design))
+  }
   const loadDesign = (d: AnimalDesign) => {
     load(structuredCloneSafe(d))
     setSelectedId(null)
