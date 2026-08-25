@@ -22,6 +22,7 @@ import {
   loadLibrary,
   upsertDesign,
 } from './library'
+import { coerceDesign } from './model'
 import './studio.css'
 
 const CLIP_META: Record<Clip, { icon: string; label: string }> = {
@@ -142,6 +143,34 @@ export default function AnimalStudio({
     load(d)
     setSelectedId(null)
   }
+  // Load the bundled 20-animal pack (public/animal-pack) into the library.
+  // Existing entries with the same pack id are updated, so it also restores
+  // accidentally deleted animals.
+  const loadPack = async () => {
+    try {
+      const base = import.meta.env.BASE_URL
+      const manifest: { name: string; file: string }[] = await fetch(
+        `${base}animal-pack/manifest.json`,
+      ).then((r) => r.json())
+      const designs = (
+        await Promise.all(
+          manifest.map((m) =>
+            fetch(`${base}animal-pack/${m.file}`)
+              .then((r) => r.json())
+              .then((j) => coerceDesign(j))
+              .catch(() => null),
+          ),
+        )
+      ).filter(Boolean) as AnimalDesign[]
+      if (designs.length === 0) throw new Error('empty')
+      setLibrary((lib) => designs.reduce((l, d) => upsertDesign(l, d), lib))
+      setShowLibrary(true)
+      alert(`Loaded ${designs.length} pack animals into the library.`)
+    } catch {
+      alert('Could not load the bundled animal pack.')
+    }
+  }
+
   // Import one or many .animal.json files. A single file opens in the editor
   // (as before); a batch is saved straight into the library.
   const onImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,6 +247,9 @@ export default function AnimalStudio({
           </button>
           <button className="mini" onClick={() => fileInput.current?.click()} title="Import JSON (select several for a batch)">
             ⬆︎
+          </button>
+          <button className="mini" onClick={loadPack} title="Load the bundled 20-animal pack (restores deleted ones)">
+            📦 Pack
           </button>
           <button
             className={`mini ${showLibrary ? 'on' : ''}`}

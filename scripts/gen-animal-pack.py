@@ -760,11 +760,21 @@ packs.append(design("Bird", bibl, {"idle": {"bob": 0.1, "speed": 2.6},
                                    "walk": {"bodyBob": 0.15, "speed": 3.0}, "jump": {"height": 1.5}}))
 
 # ---- write files -----------------------------------------------------------
+# The pack is written twice: animal-pack/ is the versioned source of truth,
+# public/animal-pack/ ships with the app so the Studio's "Animal pack" button
+# can restore the whole set in one click.
+PUB = os.path.join(os.path.dirname(__file__), '..', 'public', 'animal-pack')
+os.makedirs(PUB, exist_ok=True)
 total = 0
+manifest = []
 for d in packs:
     slug = d["name"].lower().replace(" ", "-")
-    with open(os.path.join(OUT, f"{slug}.animal.json"), "w") as f:
-        json.dump(d, f, indent=1)
+    for base in (OUT, PUB):
+        with open(os.path.join(base, f"{slug}.animal.json"), "w") as f:
+            json.dump(d, f, indent=1)
+    manifest.append({"name": d["name"], "file": f"{slug}.animal.json"})
     total += len(d["blocks"])
     print(f"{d['name']:<12} {len(d['blocks']):>4} blocks")
-print(f"\n{len(packs)} animals, {total} blocks total")
+with open(os.path.join(PUB, "manifest.json"), "w") as f:
+    json.dump(manifest, f, indent=1)
+print(f"\n{len(packs)} animals, {total} blocks total (+ public/animal-pack for one-click restore)")
