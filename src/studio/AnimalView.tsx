@@ -3,7 +3,7 @@ import { useFrame, ThreeEvent } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
 import * as THREE from 'three'
 import { AnimParams, Block, Clip } from './model'
-import { blockPose, pivotFor, rootPose } from './animate'
+import { blockPose, legPivots, pivotFor, rootPose } from './animate'
 
 const DEG = Math.PI / 180
 
@@ -41,8 +41,9 @@ export default function AnimalView({
   }, [clip])
 
   const pivots = useMemo(() => {
+    const legs = legPivots(blocks)
     const m: Record<string, [number, number, number]> = {}
-    for (const b of blocks) m[b.id] = pivotFor(b)
+    for (const b of blocks) m[b.id] = legs[b.role] ?? pivotFor(b)
     return m
   }, [blocks])
 

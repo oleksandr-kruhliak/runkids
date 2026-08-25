@@ -32,6 +32,34 @@ export function pivotFor(b: Block): Vec3 {
 const isLeg = (r: Role) =>
   r === 'legFL' || r === 'legFR' || r === 'legBL' || r === 'legBR'
 
+/**
+ * Shared hip pivot per leg role, so multi-block legs (leg + hoof + claws)
+ * swing as one rigid unit. Rotating each block about its own pivot left feet
+ * spinning in place while the leg's end swung away from them.
+ */
+export function legPivots(blocks: Block[]): Partial<Record<Role, Vec3>> {
+  const out: Partial<Record<Role, Vec3>> = {}
+  for (const role of ['legFL', 'legFR', 'legBL', 'legBR'] as Role[]) {
+    let minX = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    let minZ = Infinity
+    let maxZ = -Infinity
+    let any = false
+    for (const b of blocks) {
+      if (b.role !== role) continue
+      any = true
+      minX = Math.min(minX, b.pos[0])
+      maxX = Math.max(maxX, b.pos[0])
+      maxY = Math.max(maxY, b.pos[1] + b.size[1] / 2)
+      minZ = Math.min(minZ, b.pos[2])
+      maxZ = Math.max(maxZ, b.pos[2])
+    }
+    if (any) out[role] = [(minX + maxX) / 2, maxY, (minZ + maxZ) / 2]
+  }
+  return out
+}
+
 /** Diagonal gait phase offset: FL+BR move together, FR+BL together (opposite). */
 function legPhase(r: Role): number {
   return r === 'legFL' || r === 'legBR' ? 0 : Math.PI

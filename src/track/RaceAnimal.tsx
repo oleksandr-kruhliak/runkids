@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { AnimalDesign, Block } from '../studio/model'
-import { blockPose, pivotFor, rootPose } from '../studio/animate'
+import { blockPose, legPivots, pivotFor, rootPose } from '../studio/animate'
 
 const DEG = Math.PI / 180
 const TARGET = 2.0 // world units the animal's largest dimension is scaled to
@@ -117,8 +117,9 @@ export default function RaceAnimal({
       headPivot[2] = hz
     }
 
+    const legs = legPivots(design.blocks)
     const pivots: Record<string, [number, number, number]> = {}
-    for (const b of dynamicBlocks) pivots[b.id] = pivotFor(b)
+    for (const b of dynamicBlocks) pivots[b.id] = legs[b.role] ?? pivotFor(b)
 
     return {
       staticGeom: mergedGeometry(statics, [0, 0, 0]),
