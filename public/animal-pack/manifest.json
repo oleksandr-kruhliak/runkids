@@ -78,5 +78,9 @@
  {
   "name": "Bird",
   "file": "bird.animal.json"
+ },
+ {
+  "name": "Dragon",
+  "file": "dragon.animal.json"
  }
 ]

@@ -784,6 +784,74 @@ bibl += [
 packs.append(design("Bird", bibl, {"idle": {"bob": 0.1, "speed": 2.6},
                                    "walk": {"bodyBob": 0.15, "speed": 3.0}, "jump": {"height": 1.5}}))
 
+# ---- 21 DRAGON (2000-block showcase) ---------------------------------------
+set_u(0.0865)
+dg, dd, db, dw, dh = "#43b04a", "#2e7d3a", "#cfe89a", "#37968f", "#f2e2b8"
+v = Vox()
+def dragon_body(wx, wy, wz):
+    if wy < -0.1 and wz > -0.75:
+        return db  # belly plates
+    if wy > 0.42:
+        return dd  # darker back
+    return dg
+v.ellipsoid(0, 0.15, -0.25, 0.52, 0.46, 0.88, dragon_body, wob=0.25)
+# chest + neck rising to the head
+v.ellipsoid(0, 0.2, 0.5, 0.42, 0.42, 0.35, lambda wx, wy, wz: db if wz > 0.55 and wy < 0.3 else dg, seed=31)
+for i in range(5):
+    t = i / 4
+    v.ellipsoid(0, 0.45 + t * 0.75, 0.62 + t * 0.28, 0.24 - t * 0.04, 0.2, 0.24 - t * 0.03,
+                lambda wx, wy, wz: db if wz > 0.75 else dg, seed=33 + i)
+dbl = v.merge("body", "Body")
+hv = Vox()
+hv.ellipsoid(0, 1.32, 0.98, 0.3, 0.26, 0.34, lambda wx, wy, wz: dd if wy > 1.48 else dg, wob=0.2, seed=41)
+hv.box(-0.18, 1.14, 1.2, 0.18, 1.36, 1.55, lambda wx, wy, wz: dg if wy > 1.24 else db)  # snout
+dbl += hv.merge("head", "Head")
+dbl += [
+    B("Nostril L", "head", [-0.09, 1.34, 1.58], [0.06, 0.06, 0.05], "#1c4a24"),
+    B("Nostril R", "head", [0.09, 1.34, 1.58], [0.06, 0.06, 0.05], "#1c4a24"),
+    B("Flame L", "head", [-0.09, 1.3, 1.7], [0.08, 0.1, 0.12], "#ff8a2e"),
+    B("Flame R", "head", [0.09, 1.3, 1.7], [0.08, 0.1, 0.12], "#ffd447"),
+    B("Eye L", "head", [-0.22, 1.42, 1.18], [0.09, 0.12, 0.06], "#ffd21c"),
+    B("Eye R", "head", [0.22, 1.42, 1.18], [0.09, 0.12, 0.06], "#ffd21c"),
+    B("Pupil L", "head", [-0.22, 1.42, 1.22], [0.04, 0.1, 0.04], "#1c1c1c"),
+    B("Pupil R", "head", [0.22, 1.42, 1.22], [0.04, 0.1, 0.04], "#1c1c1c"),
+    B("Horn L", "head", [-0.16, 1.62, 0.78], [0.1, 0.26, 0.1], dh, [-20, 0, 0]),
+    B("Horn R", "head", [0.16, 1.62, 0.78], [0.1, 0.26, 0.1], dh, [-20, 0, 0]),
+    B("Horn tip L", "head", [-0.16, 1.78, 0.72], [0.07, 0.14, 0.07], "#fff6e0", [-30, 0, 0]),
+    B("Horn tip R", "head", [0.16, 1.78, 0.72], [0.07, 0.14, 0.07], "#fff6e0", [-30, 0, 0]),
+    B("Tooth L", "head", [-0.12, 1.18, 1.5], [0.05, 0.09, 0.05], "#ffffff"),
+    B("Tooth R", "head", [0.12, 1.18, 1.5], [0.05, 0.09, 0.05], "#ffffff"),
+]
+# back spikes along the spine
+for i, (sy, sz) in enumerate([(0.98, 0.55), (0.86, 0.3), (0.72, 0.02), (0.66, -0.28),
+                              (0.6, -0.58), (0.5, -0.88)]):
+    dbl.append(B(f"Spike {i+1}", "body", [0, sy, sz], [0.1, 0.22, 0.12], dh))
+    dbl.append(B(f"Spike {i+1} tip", "body", [0, sy + 0.14, sz], [0.06, 0.12, 0.08], "#fff6e0"))
+# wings (ear role -> they flap while running/jumping)
+dbl += [
+    B("Wing arm L", "ear", [-0.6, 0.75, 0.05], [0.5, 0.12, 0.14], dd, [0, 0, 26]),
+    B("Wing arm R", "ear", [0.6, 0.75, 0.05], [0.5, 0.12, 0.14], dd, [0, 0, -26]),
+    B("Wing L", "ear", [-0.95, 0.72, -0.15], [0.16, 0.65, 1.05], dw, [0, 0, 30]),
+    B("Wing R", "ear", [0.95, 0.72, -0.15], [0.16, 0.65, 1.05], dw, [0, 0, -30]),
+    B("Wing tip L", "ear", [-1.22, 0.52, -0.3], [0.12, 0.45, 0.75], "#5cc2ba", [0, 0, 42]),
+    B("Wing tip R", "ear", [1.22, 0.52, -0.3], [0.12, 0.45, 0.75], "#5cc2ba", [0, 0, -42]),
+]
+# tail: five shrinking segments + spike tip
+for i in range(5):
+    t = i / 4
+    dbl.append(B(f"Tail {i+1}", "tail", [0, 0.12 - t * 0.02, -1.15 - i * 0.3],
+                 [0.34 - t * 0.2, 0.3 - t * 0.18, 0.34], dg if i % 2 == 0 else dd))
+dbl.append(B("Tail spike", "tail", [0, 0.14, -2.42], [0.1, 0.28, 0.16], dh))
+dbl += legs4(0.38, -0.42, 0.42, -0.45, [0.26, 0.42, 0.26], dg, feet=[0.3, 0.12, 0.32], foot_color=dd)
+for side, role in ((-1, "legFL"), (1, "legFR"), (-1, "legBL"), (1, "legBR")):
+    zf = 0.42 if "F" in role else -0.45
+    for j in range(3):
+        dbl.append(B(f"Claw {role} {j}", role, [side * 0.38 + (j - 1) * 0.1, -0.66, zf + 0.2],
+                     [0.06, 0.08, 0.1], "#ffffff"))
+packs.append(design("Dragon", dbl, {"walk": {"legSwing": 34, "bodyBob": 0.11, "speed": 2.0},
+                                    "jump": {"height": 1.6, "tuck": 30},
+                                    "idle": {"bob": 0.07, "speed": 1.4}}))
+
 # ---- write files -----------------------------------------------------------
 # The pack is written twice: animal-pack/ is the versioned source of truth,
 # public/animal-pack/ ships with the app so the Studio's "Animal pack" button
