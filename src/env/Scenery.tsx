@@ -28,7 +28,6 @@ import {
 
 const CORRIDOR = ((NUM_LANES - 1) / 2) * LANE_SPACING + 2.6 // road + clearance
 const REACH = 38
-const MAX_HALF = 60
 
 const rnd = (n: number) => {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
@@ -332,7 +331,9 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
   const grassTop = env.grass
   const isVoxel = set !== 'classic'
 
-  // Shared scatter helper: pick a clear spot away from the road.
+  // Shared scatter helper: pick spots away from the road, remembering how far
+  // each one is from the nearest track point so big structures (mountains,
+  // plateaus with rivers) can demand extra clearance.
   const scatterSpots = (
     count: number,
     half: number,
@@ -342,7 +343,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     clearance: number,
     salt: number,
   ) => {
-    const out: { x: number; z: number; seed: number }[] = []
+    const out: { x: number; z: number; seed: number; clear: number }[] = []
     let tries = 0
     let i = 0
     while (out.length < count && tries < count * 8) {
@@ -350,17 +351,16 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
       i++
       const x = cx + (rnd(i * 2 + 1 + salt) - 0.5) * 2 * half
       const z = cz + (rnd(i * 2 + 2 + salt) - 0.5) * 2 * half
-      let near = false
+      let nearSq = Infinity
       for (let k = 0; k < pts.length; k += 2) {
         const dx = pts[k].x - x
         const dz = pts[k].z - z
-        if (dx * dx + dz * dz < clearance * clearance) {
-          near = true
-          break
-        }
+        const dSq = dx * dx + dz * dz
+        if (dSq < nearSq) nearSq = dSq
       }
-      if (near) continue
-      out.push({ x, z, seed: i + salt })
+      const clear = Math.sqrt(nearSq)
+      if (clear < clearance) continue
+      out.push({ x, z, seed: i + salt, clear })
     }
     return out
   }
@@ -370,7 +370,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     if (isVoxel || density <= 0 || track.length === 0) return []
     const cx = track.boundsCenter.x
     const cz = track.boundsCenter.z
-    const half = Math.min(track.radius + REACH, MAX_HALF)
+    const half = track.radius + REACH
     const areaScale = Math.max(0.5, Math.min(2, (half * half) / 1600))
     const count = Math.round(density * 0.9 * areaScale)
     return scatterSpots(count, half, cx, cz, track.center.points, CORRIDOR, 0).map((sp, n) => {
@@ -405,7 +405,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     const jsx: Item[] = []
     const cx = track.boundsCenter.x
     const cz = track.boundsCenter.z
-    const half = Math.min(track.radius + REACH, MAX_HALF)
+    const half = track.radius + REACH
     const areaScale = Math.max(0.5, Math.min(2, (half * half) / 1600))
     const count = Math.min(140, Math.round(density * 1.1 * areaScale))
     const pts = track.center.points
@@ -417,7 +417,6 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
       const r = rnd(sp.seed * 5 + 3)
       const awayX = sp.x - cx
       const awayZ = sp.z - cz
-      const fromCenter = Math.sqrt(awayX * awayX + awayZ * awayZ)
       const addExtra = extra !== 'none' && r < 0.1
       if (addExtra) {
         jsx.push({
@@ -431,11 +430,17 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
         continue
       }
       const t = extra !== 'none' ? (r - 0.1) / 0.9 : r
+      // How much room the spot has beyond the base road clearance decides
+      // whether wide structures (mountains, plateaus + rivers, buildings)
+      // may go here; tight spots downgrade to slim props.
+      const room = sp.clear - (CORRIDOR + 2)
       switch (set) {
         case 'forest':
           if (t < 0.4) vTree(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.52) vTallTree(bag, sp.x, sp.z, sp.seed, tree)
-          else if (t < 0.6) vPlateau(bag, sp.x, sp.z, sp.seed, grassTop, rnd(sp.seed + 7) > 0.45, awayX, awayZ)
+          else if (t < 0.6 && room > 3.5) {
+            vPlateau(bag, sp.x, sp.z, sp.seed, grassTop, room > 12 && rnd(sp.seed + 7) > 0.45, awayX, awayZ)
+          } else if (t < 0.6) vTree(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.74) vBush(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.88) vFlowers(bag, sp.x, sp.z, sp.seed)
           else vRocks(bag, sp.x, sp.z, sp.seed)
@@ -443,7 +448,9 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
         case 'savanna':
           if (t < 0.44) vAcacia(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.56) vRocks(bag, sp.x, sp.z, sp.seed)
-          else if (t < 0.66) vPlateau(bag, sp.x, sp.z, sp.seed, '#e0b556', rnd(sp.seed + 7) > 0.55, awayX, awayZ)
+          else if (t < 0.66 && room > 3.5) {
+            vPlateau(bag, sp.x, sp.z, sp.seed, '#e0b556', room > 12 && rnd(sp.seed + 7) > 0.55, awayX, awayZ)
+          } else if (t < 0.66) vAcacia(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.86) vBush(bag, sp.x, sp.z, sp.seed, '#a8a04e')
           else vFlowers(bag, sp.x, sp.z, sp.seed)
           break
@@ -452,17 +459,18 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           else if (t < 0.5) vFloe(bag, sp.x, sp.z, sp.seed)
           else if (t < 0.64) vDrift(bag, sp.x, sp.z, sp.seed)
           else if (t < 0.74) vRocks(bag, sp.x, sp.z, sp.seed, true)
-          else if (fromCenter > track.radius + 9) vMountain(bag, sp.x, sp.z, sp.seed)
+          else if (room > 7) vMountain(bag, sp.x, sp.z, sp.seed)
           else vPine(bag, sp.x, sp.z, sp.seed, tree, true)
           break
         case 'city':
           if (t < 0.08 && balloons < 3) {
             balloons++
             jsx.push({ key: jsx.length, kind: 'balloon', pos: [sp.x, 0, sp.z], rot: 0, scale: 0.9, seed: sp.seed })
-          } else if (t < 0.11 && ferris < 1 && fromCenter > track.radius + 6) {
+          } else if (t < 0.11 && ferris < 1 && room > 4.5) {
             ferris++
             jsx.push({ key: jsx.length, kind: 'ferris', pos: [sp.x, 0, sp.z], rot: rnd(sp.seed) * Math.PI, scale: 1.1, seed: sp.seed })
-          } else if (t < 0.56) vBuilding(bag, sp.x, sp.z, sp.seed)
+          } else if (t < 0.56 && room > 2.5) vBuilding(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.56) vTree(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.72) vTree(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.8) vLamp(bag, sp.x, sp.z, sp.seed)
           else if (t < 0.9) vFlowers(bag, sp.x, sp.z, sp.seed)
@@ -471,11 +479,13 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
       }
     }
 
-    // Backdrop ring: big landmarks beyond the field so the horizon feels full.
+    // Backdrop ring: big landmarks strictly beyond the track's bounding
+    // radius (plus the widest structure's footprint) so they can never sit on
+    // a distant stretch of a large course.
     const ringCount = Math.round(14 * Math.max(0.7, areaScale))
     for (let i = 0; i < ringCount; i++) {
       const a = (i / ringCount) * Math.PI * 2 + rnd(i + 77) * 0.5
-      const rr = half * (0.95 + rnd(i + 88) * 0.3)
+      const rr = track.radius + 12 + rnd(i + 88) * (REACH - 14)
       const x = cx + Math.cos(a) * rr
       const z = cz + Math.sin(a) * rr
       const seed = 5000 + i
