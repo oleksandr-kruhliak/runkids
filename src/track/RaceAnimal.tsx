@@ -1,7 +1,8 @@
-import { MutableRefObject, useMemo, useRef } from 'react'
+import { MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { AnimalDesign } from '../studio/model'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { AnimalDesign, Block } from '../studio/model'
 import { blockPose, pivotFor, rootPose } from '../studio/animate'
 
 const DEG = Math.PI / 180
@@ -19,11 +20,44 @@ interface Props {
   faceY?: number
 }
 
+/** Merge a set of blocks into one vertex-coloured geometry (origin-relative). */
+function mergedGeometry(blocks: Block[], origin: [number, number, number]): THREE.BufferGeometry | null {
+  if (blocks.length === 0) return null
+  const parts: THREE.BufferGeometry[] = []
+  const m = new THREE.Matrix4()
+  const q = new THREE.Quaternion()
+  const e = new THREE.Euler()
+  const one = new THREE.Vector3(1, 1, 1)
+  const v = new THREE.Vector3()
+  const c = new THREE.Color()
+  for (const b of blocks) {
+    const g = new THREE.BoxGeometry(b.size[0], b.size[1], b.size[2])
+    e.set(b.rot[0] * DEG, b.rot[1] * DEG, b.rot[2] * DEG)
+    q.setFromEuler(e)
+    v.set(b.pos[0] - origin[0], b.pos[1] - origin[1], b.pos[2] - origin[2])
+    m.compose(v, q, one)
+    g.applyMatrix4(m)
+    c.set(b.color)
+    const n = g.attributes.position.count
+    const colors = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      colors[i * 3] = c.r
+      colors[i * 3 + 1] = c.g
+      colors[i * 3 + 2] = c.b
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+    parts.push(g)
+  }
+  const merged = mergeGeometries(parts, false)
+  parts.forEach((p) => p.dispose())
+  return merged
+}
+
 /**
- * Renders a saved cube-animal design as a track racer. It auto-centers and
- * scales the design to a consistent size (like the .glb racers do), then plays
- * the Studio's procedural animation: it walks while the lane is moving and
- * idles when held up, speeding the walk cadence with the actual velocity.
+ * Renders a saved cube-animal design as a track racer. High-detail designs
+ * (hundreds of voxels) stay cheap: blocks that never rotate (body/static) are
+ * merged into one mesh, the head is merged and rotates rigidly about a shared
+ * neck pivot, and only the animated limbs remain individual meshes.
  */
 export default function RaceAnimal({
   design,
@@ -33,10 +67,11 @@ export default function RaceAnimal({
   faceY = 0,
 }: Props) {
   const bobRef = useRef<THREE.Group>(null)
+  const headRef = useRef<THREE.Group>(null)
   const outer = useRef<Record<string, THREE.Group | null>>({})
   const tRef = useRef(0)
 
-  const { blocks, pivots, scale, offset } = useMemo(() => {
+  const { staticGeom, headGeom, headPivot, dynamicBlocks, pivots, scale, offset } = useMemo(() => {
     // Bounding box over every block corner.
     const min = new THREE.Vector3(Infinity, Infinity, Infinity)
     const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity)
@@ -55,10 +90,54 @@ export default function RaceAnimal({
       -min.y,
       -(min.z + max.z) / 2,
     ]
+
+    const statics: Block[] = []
+    const heads: Block[] = []
+    const dynamicBlocks: Block[] = []
+    for (const b of design.blocks) {
+      if (b.role === 'body' || b.role === 'none') statics.push(b)
+      else if (b.role === 'head') heads.push(b)
+      else dynamicBlocks.push(b)
+    }
+
+    // The whole head nods about one shared neck pivot (back-bottom of its
+    // bounding box) — same convention as pivotFor, minus per-block shear.
+    const headPivot: [number, number, number] = [0, 0, 0]
+    if (heads.length > 0) {
+      let hy = Infinity
+      let hz = Infinity
+      let hx = 0
+      for (const b of heads) {
+        hy = Math.min(hy, b.pos[1] - b.size[1] / 2)
+        hz = Math.min(hz, b.pos[2] - b.size[2] / 2)
+        hx += b.pos[0]
+      }
+      headPivot[0] = hx / heads.length
+      headPivot[1] = hy
+      headPivot[2] = hz
+    }
+
     const pivots: Record<string, [number, number, number]> = {}
-    for (const b of design.blocks) pivots[b.id] = pivotFor(b)
-    return { blocks: design.blocks, pivots, scale, offset }
+    for (const b of dynamicBlocks) pivots[b.id] = pivotFor(b)
+
+    return {
+      staticGeom: mergedGeometry(statics, [0, 0, 0]),
+      headGeom: mergedGeometry(heads, headPivot),
+      headPivot,
+      dynamicBlocks,
+      pivots,
+      scale,
+      offset,
+    }
   }, [design])
+
+  // Dispose merged geometries when the design changes / unmounts.
+  useEffect(() => {
+    return () => {
+      staticGeom?.dispose()
+      headGeom?.dispose()
+    }
+  }, [staticGeom, headGeom])
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05)
@@ -75,7 +154,11 @@ export default function RaceAnimal({
       bobRef.current.position.y = rp.y
       bobRef.current.rotation.x = rp.pitch
     }
-    for (const b of blocks) {
+    if (headRef.current) {
+      const hp = blockPose('head', clip, t, design.anim)
+      headRef.current.rotation.set(hp.rx, hp.ry, hp.rz)
+    }
+    for (const b of dynamicBlocks) {
       const g = outer.current[b.id]
       if (!g) continue
       const bp = blockPose(b.role, clip, t, design.anim)
@@ -87,7 +170,19 @@ export default function RaceAnimal({
     <group scale={scale} position={[0, groundDrop, 0]} rotation={[0, faceY, 0]}>
       <group ref={bobRef}>
         <group position={offset}>
-          {blocks.map((b) => {
+          {staticGeom && (
+            <mesh geometry={staticGeom} castShadow>
+              <meshStandardMaterial vertexColors flatShading />
+            </mesh>
+          )}
+          {headGeom && (
+            <group ref={headRef} position={headPivot}>
+              <mesh geometry={headGeom} castShadow>
+                <meshStandardMaterial vertexColors flatShading />
+              </mesh>
+            </group>
+          )}
+          {dynamicBlocks.map((b) => {
             const pv = pivots[b.id] ?? b.pos
             return (
               <group

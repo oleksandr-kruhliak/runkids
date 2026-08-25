@@ -12,7 +12,12 @@ import json, math, os
 OUT = os.path.join(os.path.dirname(__file__), '..', 'animal-pack')
 os.makedirs(OUT, exist_ok=True)
 
-U = 0.15  # voxel size (world units)
+U = 0.15  # voxel size (world units); set per animal to land ~1000 blocks each
+
+def set_u(v):
+    """Per-animal voxel fineness: smaller cubes -> more blocks (count ~ U^-3)."""
+    global U
+    U = v
 
 ANIM = {
     "idle": {"bob": 0.05, "speed": 1.6},
@@ -181,6 +186,7 @@ def quadruped(name, body_c, belly_c, head_c, *, size=1.0, body_pat=None, head_pa
     return design(name, blocks, anim)
 
 # ---- 1 FOX -----------------------------------------------------------------
+set_u(0.102)
 o, cream, dark = "#e8722e", "#fff1dd", "#8a4a1f"
 packs.append(quadruped(
     "Fox", o, cream, o,
@@ -208,6 +214,7 @@ packs.append(quadruped(
 ))
 
 # ---- 2 PANDA ---------------------------------------------------------------
+set_u(0.107)
 w, k = "#f5f5f0", "#232323"
 packs.append(quadruped(
     "Panda", w, None, w, size=1.05,
@@ -237,6 +244,7 @@ packs.append(quadruped(
 ))
 
 # ---- 3 LION ----------------------------------------------------------------
+set_u(0.101)
 g, mane, tuft = "#f2b53c", "#9a5b22", "#7a441a"
 mane_blocks = []
 for i, (mx, my) in enumerate([(-0.44, 1.02), (0, 1.14), (0.44, 1.02), (-0.56, 0.62), (0.56, 0.62),
@@ -263,6 +271,7 @@ packs.append(quadruped(
 ))
 
 # ---- 4 ELEPHANT ------------------------------------------------------------
+set_u(0.124)
 e, ed = "#a8adb8", "#8d93a0"
 packs.append(quadruped(
     "Elephant", e, None, e, size=1.25,
@@ -294,6 +303,7 @@ packs.append(quadruped(
 ))
 
 # ---- 5 PIG -----------------------------------------------------------------
+set_u(0.1)
 p, pd = "#f2a0b4", "#e0879e"
 packs.append(quadruped(
     "Pig", p, "#f8c2d0", p,
@@ -319,6 +329,7 @@ packs.append(quadruped(
 ))
 
 # ---- 6 GIRAFFE -------------------------------------------------------------
+set_u(0.098)
 y, spot = "#f0c04a", "#b57427"
 def giraffe_spots(wx, wy, wz):
     s = math.sin(round(wx / 0.3) * 12.7 + round(wy / 0.3) * 31.7 + round(wz / 0.3) * 74.3) * 43758.5
@@ -350,6 +361,7 @@ gbl += legs4(0.3, -0.42, 0.35, -0.5, [0.2, 0.72, 0.2], y, feet=[0.22, 0.12, 0.22
 packs.append(design("Giraffe", gbl, {"walk": {"legSwing": 30}}))
 
 # ---- 7 ZEBRA ---------------------------------------------------------------
+set_u(0.098)
 zw, zk = "#f2f2ee", "#22222a"
 def zebra_stripes(wx, wy, wz):
     # thin vertical stripes: one dark band every three voxel columns
@@ -377,6 +389,7 @@ packs.append(quadruped(
 ))
 
 # ---- 8 RABBIT --------------------------------------------------------------
+set_u(0.086)
 rw, rp = "#f6f4ef", "#f0b8c8"
 packs.append(quadruped(
     "Rabbit", rw, "#ffffff", rw, size=0.9,
@@ -401,6 +414,7 @@ packs.append(quadruped(
 ))
 
 # ---- 9 POLAR BEAR ----------------------------------------------------------
+set_u(0.115)
 pw, pc = "#f2f0e8", "#e0dcd0"
 packs.append(quadruped(
     "Polar Bear", pw, None, pw, size=1.2,
@@ -423,6 +437,7 @@ packs.append(quadruped(
 ))
 
 # ---- 10 PENGUIN ------------------------------------------------------------
+set_u(0.088)
 pk, pw2, po = "#23232e", "#f6f6f2", "#f29a2e"
 v = Vox()
 def penguin_body(wx, wy, wz):
@@ -454,6 +469,7 @@ pbl += [
 packs.append(design("Penguin", pbl, {"walk": {"legSwing": 20, "bodyBob": 0.16, "speed": 3.0}}))
 
 # ---- 11 CROCODILE ----------------------------------------------------------
+set_u(0.091)
 cg, cd, cl = "#5da33c", "#417a28", "#c8e09a"
 v = Vox()
 def croc_body(wx, wy, wz):
@@ -490,6 +506,7 @@ cbl += legs4(0.44, -0.32, 0.32, -0.6, [0.22, 0.22, 0.26], cg)
 packs.append(design("Crocodile", cbl, {"walk": {"legSwing": 24, "bodyBob": 0.04, "speed": 2.4}}))
 
 # ---- 12 FROG ---------------------------------------------------------------
+set_u(0.092)
 fg, fl = "#5cc23e", "#bfe89a"
 v = Vox()
 def frog_body(wx, wy, wz):
@@ -518,6 +535,7 @@ fbl += legs4(0.44, -0.35, 0.32, -0.32, [0.26, 0.24, 0.3], fg,
 packs.append(design("Frog", fbl, {"jump": {"height": 1.7, "tuck": 40}, "walk": {"bodyBob": 0.14}}))
 
 # ---- 13 MONKEY -------------------------------------------------------------
+set_u(0.089)
 mb, mt = "#8a5a34", "#e8c89a"
 packs.append(quadruped(
     "Monkey", mb, mt, mb, size=0.9,
@@ -555,6 +573,7 @@ packs.append(quadruped(
 ))
 
 # ---- 14 TURTLE -------------------------------------------------------------
+set_u(0.085)
 tg, ts, tp = "#6fbf4a", "#4a7a3a", "#8a5a34"
 v = Vox()
 def turtle_shell(wx, wy, wz):
@@ -578,6 +597,7 @@ tbl += legs4(0.48, -0.32, 0.42, -0.42, [0.26, 0.2, 0.3], tg)
 packs.append(design("Turtle", tbl, {"walk": {"legSwing": 20, "speed": 1.5, "bodyBob": 0.03}}))
 
 # ---- 15 WOLF ---------------------------------------------------------------
+set_u(0.102)
 wg, wl, wd = "#9aa2ac", "#d8dde2", "#5f6772"
 packs.append(quadruped(
     "Wolf", wg, wl, wg,
@@ -608,6 +628,7 @@ packs.append(quadruped(
 ))
 
 # ---- 16 OWL ----------------------------------------------------------------
+set_u(0.088)
 ob, ol, oy = "#8a6844", "#e0cfa8", "#f2b53c"
 v = Vox()
 def owl_body(wx, wy, wz):
@@ -641,6 +662,7 @@ obl += [
 packs.append(design("Owl", obl, {"walk": {"legSwing": 18, "bodyBob": 0.13, "speed": 2.8}}))
 
 # ---- 17 BEE ----------------------------------------------------------------
+set_u(0.084)
 by, bk, bw = "#f6c62e", "#26262e", "#e8f2fa"
 v = Vox()
 def bee_body(wx, wy, wz):
@@ -668,6 +690,7 @@ bbl += legs4(0.24, -0.28, 0.25, -0.25, [0.11, 0.18, 0.11], bk)
 packs.append(design("Bee", bbl, {"idle": {"bob": 0.12, "speed": 3.2}, "walk": {"bodyBob": 0.16, "speed": 3.4}}))
 
 # ---- 18 SPIDER -------------------------------------------------------------
+set_u(0.083)
 sk, sr = "#2a2a32", "#e02e2e"
 v = Vox()
 def spider_abdomen(wx, wy, wz):
@@ -696,6 +719,7 @@ for i, (role, z) in enumerate([("legFL", 0.35), ("legFR", 0.35), ("legBL", -0.15
 packs.append(design("Spider", sbl, {"walk": {"legSwing": 26, "speed": 3.2, "bodyBob": 0.05}}))
 
 # ---- 19 CHAMELEON ----------------------------------------------------------
+set_u(0.083)
 ch, cl2, cc = "#5cc23e", "#a8e07a", "#2f8a4a"
 v = Vox()
 def cham_body(wx, wy, wz):
@@ -728,6 +752,7 @@ chbl += legs4(0.28, -0.35, 0.35, -0.4, [0.17, 0.3, 0.17], ch)
 packs.append(design("Chameleon", chbl, {"walk": {"legSwing": 22, "speed": 1.8}}))
 
 # ---- 20 BIRD ---------------------------------------------------------------
+set_u(0.08)
 bb, bl2, bo = "#2e8ae8", "#7cc4f8", "#f2b53c"
 v = Vox()
 def bird_body(wx, wy, wz):
