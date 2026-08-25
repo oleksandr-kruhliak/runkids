@@ -1,69 +1,39 @@
 import { MutableRefObject, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { LANE_WIDTH, ObstaclePlacement, spinnerAngle, stopperUp } from './build'
+import { ObstaclePlacement, spinnerAngle, stopperUp } from './build'
+import { OBSTACLE_GEO as G, OBSTACLE_GLOW_MAT, OBSTACLE_MAT } from './obstacleGeo'
 
-const W = LANE_WIDTH - 0.2
-
-/** One heavy metal hammer head (with two dark side plates), at local x. */
-function HammerHead({ x }: { x: number }) {
-  return (
-    <group position={[x, 0, 0]}>
-      <mesh>
-        <boxGeometry args={[0.5, 0.56, 0.92]} />
-        <meshStandardMaterial color="#607d8b" metalness={0.5} roughness={0.4} />
-      </mesh>
-      {[0.46, -0.46].map((z, i) => (
-        <mesh key={i} position={[0, 0, z]}>
-          <boxGeometry args={[0.54, 0.6, 0.1]} />
-          <meshStandardMaterial color="#37474f" metalness={0.4} roughness={0.5} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
+// Obstacles are voxel-built (100-200 blocks each) from shared merged
+// geometries — see obstacleGeo.ts. Only the moving parts (spinner arm,
+// stopper bar, crate fragments) are separate meshes.
 
 /**
- * A low swinging double-headed hammer: a post at the lane edge with a handle
- * that carries a heavy head on BOTH ends, swinging back and forth over the road
- * (reversing direction). The inner head sweeps the lane to knock the animal;
- * rotation is synced to the rider logic.
+ * A low swinging double-headed hammer: a voxel tower at the lane edge with a
+ * plank arm carrying a mallet head on BOTH ends, swinging back and forth over
+ * the road. Rotation is synced to the rider logic.
  */
 function Spinner({ phase }: { phase: number }) {
   const arm = useRef<THREE.Group>(null)
   useFrame((state) => {
     if (arm.current) arm.current.rotation.y = spinnerAngle(phase, state.clock.elapsedTime)
   })
-  const edgeX = LANE_WIDTH / 2 + 0.05
-  const armLen = LANE_WIDTH / 2 // each arm is half the road width
-  const armY = 0.42 // low, near the animals' body height
   return (
     <group>
-      {/* Short post at the side of the lane */}
-      <mesh position={[edgeX, 0.28, 0]}>
-        <cylinderGeometry args={[0.13, 0.16, 0.56, 12]} />
-        <meshStandardMaterial color="#455a64" metalness={0.4} roughness={0.5} />
-      </mesh>
-      {/* Hammer pivots at the post and swings across the road, low down */}
-      <group ref={arm} position={[edgeX, armY, 0]}>
-        {/* Wooden handle running through the pivot, a head on each end */}
-        <mesh>
-          <boxGeometry args={[armLen * 2, 0.14, 0.14]} />
-          <meshStandardMaterial color="#9c6b3f" flatShading />
-        </mesh>
-        <HammerHead x={-armLen} />
-        <HammerHead x={armLen} />
+      <mesh geometry={G.spinnerTower} material={OBSTACLE_MAT} castShadow />
+      <group ref={arm} position={[1.1, 0.42, 0]}>
+        <mesh geometry={G.spinnerArm} material={OBSTACLE_MAT} castShadow />
       </group>
     </group>
   )
 }
 
-const FRAG_COUNT = 10
+const FRAG_COUNT = 12
 const EXPLODE_DUR = 1.1 // seconds
 
 /**
- * A stack of crates on the road. When the lane's animal passes their position,
- * they burst into fragments that fly out and shrink, then re-form for next lap.
+ * A stack of plank crates on the road. When the lane's animal passes their
+ * position they burst into flying plank fragments, then re-form for next lap.
  */
 function Crates({
   lane,
@@ -113,9 +83,9 @@ function Crates({
       const k = Math.max(0, 1 - e / EXPLODE_DUR)
       frag.current.children.forEach((c, i) => {
         const v = vels[i]
-        c.position.set(v.x * e, v.y * e - 3 * e * e, v.z * e)
+        c.position.set(v.x * e, 0.5 + v.y * e - 3 * e * e, v.z * e)
         c.rotation.set(v.spin * e, v.spin * e * 0.7, 0)
-        c.scale.setScalar(k)
+        c.scale.setScalar(k * (0.8 + (i % 3) * 0.25))
       })
       if (e > EXPLODE_DUR) {
         s.exploding = false
@@ -125,66 +95,43 @@ function Crates({
     }
   })
 
-  const crates: [number, number, number][] = [
-    [-0.5, 0.35, 0],
-    [0.5, 0.35, 0],
-    [0, 0.35, 0.5],
-    [0, 1.05, 0.15],
-  ]
-
   return (
     <group>
       <group ref={intact}>
-        {crates.map((c, i) => (
-          <mesh key={i} position={c} castShadow>
-            <boxGeometry args={[0.66, 0.66, 0.66]} />
-            <meshStandardMaterial color={i === 3 ? '#c98a4a' : '#b5793b'} flatShading />
-          </mesh>
-        ))}
+        <mesh geometry={G.crateStack} material={OBSTACLE_MAT} castShadow />
       </group>
       <group ref={frag} visible={false}>
         {vels.map((_, i) => (
-          <mesh key={i} position={[0, 0.5, 0]}>
-            <boxGeometry args={[0.3, 0.3, 0.3]} />
-            <meshStandardMaterial color={i % 2 ? '#9c5f2c' : '#c98a4a'} flatShading />
-          </mesh>
+          <mesh key={i} geometry={G.crateFragment} material={OBSTACLE_MAT} position={[0, 0.5, 0]} />
         ))}
       </group>
     </group>
   )
 }
 
-/** A boom barrier that rises from below the track, holds, then drops. */
+/**
+ * A striped toll gate: two lamp-topped towers flank the lane and a red/white
+ * bar (with a hanging stop sign) drops to road level to block, then lifts
+ * overhead to clear. Motion is synced to the rider logic.
+ */
 function Stopper({ phase }: { phase: number }) {
-  const g = useRef<THREE.Group>(null)
+  const bar = useRef<THREE.Group>(null)
   useFrame((state) => {
-    if (!g.current) return
-    const target = stopperUp(phase, state.clock.elapsedTime) ? 0 : -1.7
-    g.current.position.y += (target - g.current.position.y) * 0.18
+    if (!bar.current) return
+    const target = stopperUp(phase, state.clock.elapsedTime) ? 0.75 : 2.3
+    bar.current.position.y += (target - bar.current.position.y) * 0.14
   })
   return (
-    <group ref={g} position={[0, -1.7, 0]}>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={[s * (LANE_WIDTH / 2), 0.6, 0]}>
-          <boxGeometry args={[0.22, 1.2, 0.22]} />
-          <meshStandardMaterial color="#eceff1" />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.95, 0]}>
-        <boxGeometry args={[LANE_WIDTH, 0.34, 0.2]} />
-        <meshStandardMaterial color="#e53935" />
-      </mesh>
-      {[-0.55, 0, 0.55].map((x, i) => (
-        <mesh key={i} position={[x, 0.95, 0.11]}>
-          <boxGeometry args={[0.22, 0.34, 0.02]} />
-          <meshStandardMaterial color="#ffffff" />
-        </mesh>
-      ))}
+    <group>
+      <mesh geometry={G.stopperPosts} material={OBSTACLE_MAT} castShadow />
+      <group ref={bar} position={[0, 2.3, 0]}>
+        <mesh geometry={G.stopperBar} material={OBSTACLE_MAT} castShadow />
+      </group>
     </group>
   )
 }
 
-/** Renders themed meshes for each placed obstacle, oriented along the track. */
+/** Renders themed voxel meshes for each placed obstacle, along the track. */
 export default function Obstacles({
   placements,
   distancesRef,
@@ -198,49 +145,21 @@ export default function Obstacles({
     <>
       {placements.map((p) => (
         <group key={p.key} position={p.position} quaternion={p.quaternion}>
+          {p.type === 'water' && <mesh geometry={G.water} material={OBSTACLE_MAT} receiveShadow />}
 
-          {p.type === 'mud' && (
-            <mesh position={[0, 0.07, 0]}>
-              <boxGeometry args={[W, 0.14, p.length]} />
-              <meshStandardMaterial color="#6d4c2f" roughness={1} />
-            </mesh>
+          {p.type === 'mud' && <mesh geometry={G.mud} material={OBSTACLE_MAT} receiveShadow />}
+
+          {p.type === 'boost' && (
+            <group>
+              <mesh geometry={G.boostBase} material={OBSTACLE_MAT} receiveShadow />
+              <mesh geometry={G.boostGlow} material={OBSTACLE_GLOW_MAT} />
+            </group>
           )}
-
-          {p.type === 'boost' &&
-            [-p.length / 3, 0, p.length / 3].map((z, i) => (
-              <mesh key={i} position={[0, 0.12, z]} rotation={[-Math.PI / 2, 0, 0]}>
-                <coneGeometry args={[0.55, 1.0, 4]} />
-                <meshStandardMaterial color="#ffd21a" emissive="#ffa000" emissiveIntensity={0.6} />
-              </mesh>
-            ))}
 
           {p.type === 'trampoline' && (
             <group>
-              {[
-                [-0.6, -0.6],
-                [0.6, -0.6],
-                [-0.6, 0.6],
-                [0.6, 0.6],
-              ].map(([x, z], i) => (
-                <mesh key={i} position={[x, 0.25, z]}>
-                  <cylinderGeometry args={[0.08, 0.08, 0.5, 8]} />
-                  <meshStandardMaterial color="#9e9e9e" metalness={0.6} roughness={0.3} />
-                </mesh>
-              ))}
-              <mesh position={[0, 0.5, 0]}>
-                <cylinderGeometry args={[1.0, 1.0, 0.16, 24]} />
-                <meshStandardMaterial color="#37474f" />
-              </mesh>
-              <mesh position={[0, 0.59, 0]}>
-                <cylinderGeometry args={[0.82, 0.82, 0.08, 24]} />
-                <meshStandardMaterial color="#26c6da" emissive="#0097a7" emissiveIntensity={0.3} />
-              </mesh>
-              {[0.9, 1.5].map((y, i) => (
-                <mesh key={i} position={[0, y, 0]}>
-                  <coneGeometry args={[0.32 - i * 0.08, 0.4, 12]} />
-                  <meshStandardMaterial color="#00e5ff" emissive="#00b8d4" emissiveIntensity={0.6} />
-                </mesh>
-              ))}
+              <mesh geometry={G.trampolineBase} material={OBSTACLE_MAT} castShadow />
+              <mesh geometry={G.trampolineGlow} material={OBSTACLE_GLOW_MAT} />
             </group>
           )}
 
@@ -252,13 +171,7 @@ export default function Obstacles({
             <Crates lane={p.lane} dist={p.dist} distancesRef={distancesRef} length={length} />
           )}
 
-          {p.type === 'gap' &&
-            [-p.length / 2, p.length / 2].map((z, i) => (
-              <mesh key={i} position={[0, 0.14, z]}>
-                <boxGeometry args={[LANE_WIDTH, 0.28, 0.4]} />
-                <meshStandardMaterial color="#ffca28" emissive="#ff6f00" emissiveIntensity={0.3} />
-              </mesh>
-            ))}
+          {p.type === 'gap' && <mesh geometry={G.gap} material={OBSTACLE_MAT} castShadow />}
         </group>
       ))}
     </>
