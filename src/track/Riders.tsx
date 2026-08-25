@@ -175,6 +175,9 @@ export default function Riders({
   // Geyser hop (launch window), banana spin-out, and one-shot event guards.
   const hopStart = useRef<number[]>(Array.from({ length: MAX_LANES }, () => -99))
   const spinStart = useRef<number[]>(Array.from({ length: MAX_LANES }, () => -99))
+  // After a teleport, portals ignore this lane briefly — otherwise a backward
+  // portal would re-trigger on every re-approach and trap the racer forever.
+  const portalUntil = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Per-lane current forward speed, so the 3D models can play a run/idle
   // animation that matches whether the animal is actually moving.
   const speedRef = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
@@ -193,6 +196,7 @@ export default function Riders({
       mudStick.current[l] = 0
       hopStart.current[l] = -99
       spinStart.current[l] = -99
+      portalUntil.current[l] = 0
       speedRef.current[l] = 0
       distancesRef.current[l] = 0
       finished.current[l] = false
@@ -279,8 +283,11 @@ export default function Riders({
               hopStart.current[l] = t
             }
           } else if (o.type === 'log') {
-            const logLap = o.end - logU(o.dist, t) * o.len
-            if (inZone && lap < logLap && logLap - lap < 0.9) logPush = true
+            const u = logU(o.dist, t)
+            if (u >= 0) {
+              const logLap = o.end - u * o.len
+              if (inZone && lap < logLap && logLap - lap < 0.9) logPush = true
+            }
           }
         }
 
@@ -314,8 +321,9 @@ export default function Riders({
             if (!crossed) continue
             if (o.type === 'banana' && t > spinStart.current[l] + SPIN_OUT_DUR + 0.5) {
               spinStart.current[l] = t
-            } else if (o.type === 'portal' && o.delta != null) {
+            } else if (o.type === 'portal' && o.delta != null && t > portalUntil.current[l]) {
               dist.current[l] += o.delta
+              portalUntil.current[l] = t + 2.5
             }
           }
         }

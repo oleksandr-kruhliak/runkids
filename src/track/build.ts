@@ -121,12 +121,18 @@ export function fanOn(phase: number, t: number): boolean {
   return p < FAN_ON
 }
 
-export const LOG_PERIOD = 4.2
-/** Rolling log progress 0..1 through its zone (rolls back toward the start). */
+export const LOG_PERIOD = 5.2
+export const LOG_SWEEP = 2.6
+/**
+ * Rolling log progress 0..1 through its zone (rolls back toward the start),
+ * or -1 while the log is resting between sweeps. The rest gap is what lets
+ * racers actually get through — a continuous sweep pushes them back faster
+ * than it rolls and traps them forever.
+ */
 export function logU(phase: number, t: number): number {
   let p = (t + phase) % LOG_PERIOD
   if (p < 0) p += LOG_PERIOD
-  return p / LOG_PERIOD
+  return p < LOG_SWEEP ? p / LOG_SWEEP : -1
 }
 
 /** How far a portal throws the racer (signed; most jump forward). */

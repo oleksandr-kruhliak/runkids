@@ -253,6 +253,10 @@ function RollingLog({ phase, length }: { phase: number; length: number }) {
   useFrame((state) => {
     if (!log.current) return
     const u = logU(phase, state.clock.elapsedTime)
+    if (u < 0) {
+      log.current.scale.setScalar(0.01) // resting between sweeps
+      return
+    }
     const z = length / 2 - u * length
     log.current.position.set(0, 0.32, z)
     log.current.rotation.x = -u * length / 0.3 // roll with travel
