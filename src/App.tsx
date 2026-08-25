@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, Grid, useGLTF } from '@react-three/drei'
+import { OrbitControls, useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { OBSTACLE_PIECES, SHAPE_PIECES, PIECE_META, PieceType } from './track/pieces'
 import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from './track/build'
@@ -14,8 +14,7 @@ import PlaySetup, { PlayConfig, RaceMode } from './PlaySetup'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
-import StoneRoad from './track/StoneRoad'
-import GrassField from './track/GrassField'
+import VoxelRoad from './track/VoxelRoad'
 import Sky from './track/Sky'
 import Particles from './env/Particles'
 import Scenery from './env/Scenery'
@@ -563,15 +562,6 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
   const trialRunningCount = trialTimes.filter((t) => t != null).length
 
-  // Faint field grid lines tinted from the environment's ground colour.
-  const gridColors = useMemo(
-    () => ({
-      cell: `#${new THREE.Color(env.ground).multiplyScalar(0.92).getHexString()}`,
-      section: `#${new THREE.Color(env.ground).multiplyScalar(0.82).getHexString()}`,
-    }),
-    [env.ground],
-  )
-
   // Start/finish gate spanning all lanes, oriented to the track start.
   const gate = useMemo(() => {
     const f = sampleCenter(track.center, 0)
@@ -708,18 +698,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             <planeGeometry args={[1000, 1000]} />
             <meshStandardMaterial color={env.ground} />
           </mesh>
-          <Grid
-            args={[1000, 1000]}
-            cellSize={2}
-            cellColor={gridColors.cell}
-            sectionSize={10}
-            sectionColor={gridColors.section}
-            fadeDistance={180}
-          />
-
-          <GrassField track={track} color={env.grass} />
           <Scenery track={track} env={env} />
-          <StoneRoad track={track} />
+          <VoxelRoad track={track} />
 
           <Obstacles placements={track.placements} distancesRef={distancesRef} length={track.length} />
 

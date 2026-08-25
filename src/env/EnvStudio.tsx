@@ -4,8 +4,7 @@ import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { RIDE_OFFSET, buildTrack, sampleCenter } from '../track/build'
 import { PieceType } from '../track/pieces'
-import StoneRoad from '../track/StoneRoad'
-import GrassField from '../track/GrassField'
+import VoxelRoad from '../track/VoxelRoad'
 import Sky from '../track/Sky'
 import Animal, { ANIMAL_PALETTES } from '../track/Animal'
 import Particles from './Particles'
@@ -199,9 +198,8 @@ export default function EnvStudio({
             <planeGeometry args={[1000, 1000]} />
             <meshStandardMaterial color={p.ground} />
           </mesh>
-          <GrassField track={track} color={p.grass} />
           <Scenery track={track} env={p} />
-          <StoneRoad track={track} />
+          <VoxelRoad track={track} />
           {stand.map((a) => (
             <group key={a.key} position={a.pos} quaternion={a.quaternion} scale={0.82}>
               <Animal colors={a.colors} />
