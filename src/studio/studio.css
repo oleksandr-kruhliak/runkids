@@ -576,3 +576,12 @@
   color: #3a4553;
   font-variant-numeric: tabular-nums;
 }
+
+.env-preset.world {
+  border-color: #4aa3f0;
+  background: #eef7ff;
+}
+
+.env-preset.world:hover {
+  border-color: #1e90f0;
+}

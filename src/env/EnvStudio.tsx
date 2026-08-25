@@ -11,13 +11,17 @@ import Animal, { ANIMAL_PALETTES } from '../track/Animal'
 import Particles from './Particles'
 import Scenery from './Scenery'
 import {
+  ALL_PRESETS,
   EnvDesign,
   EnvParams,
   EXTRA_META,
   PARTICLE_META,
   PRESETS,
   ParticleKind,
+  SET_META,
   SceneryExtra,
+  ScenerySet,
+  WORLDS,
   cloneParams,
   newEnvDesign,
 } from './model'
@@ -34,6 +38,7 @@ const PREVIEW_LANES: PieceType[][] = [[], [], []]
 
 const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain']
 const EXTRAS: SceneryExtra[] = ['none', 'snowman', 'pumpkin', 'flowers']
+const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city']
 
 /** Multiply a hex colour towards dark (for grid lines derived from ground). */
 export function shade(hex: string, k: number): string {
@@ -109,7 +114,7 @@ export default function EnvStudio({
     setDesign((d) => ({ ...d, params: { ...d.params, sky: { ...d.params.sky, ...part } } }))
 
   const applyPreset = (key: string) => {
-    const preset = PRESETS.find((pr) => pr.key === key)
+    const preset = ALL_PRESETS.find((pr) => pr.key === key)
     if (preset) patch(cloneParams(preset.params))
   }
 
@@ -243,7 +248,18 @@ export default function EnvStudio({
       <div className="studio-panel">
         <section className="panel-section">
           <div className="section-head">
-            <span className="group-title">Start from a season</span>
+            <span className="group-title">Generate a world</span>
+          </div>
+          <div className="env-presets">
+            {WORLDS.map((pr) => (
+              <button key={pr.key} className="env-preset world" onClick={() => applyPreset(pr.key)}>
+                <span>{pr.icon}</span>
+                {pr.label}
+              </button>
+            ))}
+          </div>
+          <div className="section-head" style={{ marginTop: 10 }}>
+            <span className="group-title">Or start from a season</span>
           </div>
           <div className="env-presets">
             {PRESETS.map((pr) => (
@@ -293,6 +309,18 @@ export default function EnvStudio({
         <section className="panel-section">
           <div className="section-head">
             <span className="group-title">Scenery (trees, rocks &amp; friends)</span>
+          </div>
+          <div className="env-presets" style={{ marginBottom: 8 }}>
+            {SETS.map((k) => (
+              <button
+                key={k}
+                className={`env-preset ${p.scenery.set === k ? 'on' : ''}`}
+                onClick={() => patch({ scenery: { ...p.scenery, set: k } })}
+              >
+                <span>{SET_META[k].icon}</span>
+                {SET_META[k].label}
+              </button>
+            ))}
           </div>
           <SliderRow
             label="Amount"

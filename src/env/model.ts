@@ -4,6 +4,9 @@
 
 export type ParticleKind = 'none' | 'snow' | 'leaves' | 'petals' | 'rain'
 export type SceneryExtra = 'none' | 'snowman' | 'pumpkin' | 'flowers'
+/** Which asset family fills the field: the classic low-poly props, or one of
+ * the voxel world sets (cube trees, block mountains, city buildings...). */
+export type ScenerySet = 'classic' | 'forest' | 'savanna' | 'snowy' | 'city'
 
 export interface EnvParams {
   sky: { zenith: string; mid: string; horizon: string }
@@ -24,7 +27,17 @@ export interface EnvParams {
     tree: string
     /** Season special: snowmen, pumpkins, flower patches. */
     extra: SceneryExtra
+    /** Asset family: classic low-poly or a voxel world set. */
+    set: ScenerySet
   }
+}
+
+export const SET_META: Record<ScenerySet, { icon: string; label: string }> = {
+  classic: { icon: '🎪', label: 'Classic' },
+  forest: { icon: '🌳', label: 'Cube Forest' },
+  savanna: { icon: '🦒', label: 'Savanna' },
+  snowy: { icon: '🏔', label: 'Snowy Peaks' },
+  city: { icon: '🏙', label: 'Block City' },
 }
 
 export const EXTRA_META: Record<SceneryExtra, { icon: string; label: string }> = {
@@ -57,7 +70,7 @@ export const SUMMER: EnvParams = {
   grass: '#83e05a',
   particles: 'none',
   particleDensity: 0,
-  scenery: { density: 45, tree: '#3fa14f', extra: 'none' },
+  scenery: { density: 45, tree: '#3fa14f', extra: 'none', set: 'classic' },
 }
 
 export const PRESETS: { key: string; icon: string; label: string; params: EnvParams }[] = [
@@ -74,7 +87,7 @@ export const PRESETS: { key: string; icon: string; label: string; params: EnvPar
       grass: '#cfdfe8',
       particles: 'snow',
       particleDensity: 65,
-      scenery: { density: 50, tree: '#7fa696', extra: 'snowman' },
+      scenery: { density: 50, tree: '#7fa696', extra: 'snowman', set: 'classic' },
     },
   },
   {
@@ -89,7 +102,7 @@ export const PRESETS: { key: string; icon: string; label: string; params: EnvPar
       grass: '#d8a24e',
       particles: 'leaves',
       particleDensity: 55,
-      scenery: { density: 55, tree: '#d1731f', extra: 'pumpkin' },
+      scenery: { density: 55, tree: '#d1731f', extra: 'pumpkin', set: 'classic' },
     },
   },
   {
@@ -104,10 +117,78 @@ export const PRESETS: { key: string; icon: string; label: string; params: EnvPar
       grass: '#9ae970',
       particles: 'petals',
       particleDensity: 40,
-      scenery: { density: 50, tree: '#63c96a', extra: 'flowers' },
+      scenery: { density: 50, tree: '#63c96a', extra: 'flowers', set: 'classic' },
     },
   },
 ]
+
+// Voxel worlds, matching the Cube Kids channel art: saturated colours, cube
+// trees, blocky terrain and clouds.
+export const WORLDS: { key: string; icon: string; label: string; params: EnvParams }[] = [
+  {
+    key: 'forest',
+    icon: '🌳',
+    label: 'Green Forest',
+    params: {
+      sky: { zenith: '#1e90f0', mid: '#7cc4f8', horizon: '#d8f2ff' },
+      clouds: 12,
+      sun: 1.65,
+      ground: '#5fd438',
+      grass: '#6fe243',
+      particles: 'none',
+      particleDensity: 0,
+      scenery: { density: 70, tree: '#3cb52e', extra: 'flowers', set: 'forest' },
+    },
+  },
+  {
+    key: 'savanna',
+    icon: '🌅',
+    label: 'Savanna Sunset',
+    params: {
+      sky: { zenith: '#e8933a', mid: '#f7b64f', horizon: '#ffd98a' },
+      clouds: 6,
+      sun: 1.35,
+      ground: '#d9a648',
+      grass: '#e0b556',
+      particles: 'none',
+      particleDensity: 0,
+      scenery: { density: 55, tree: '#7ca43c', extra: 'none', set: 'savanna' },
+    },
+  },
+  {
+    key: 'snowy',
+    icon: '🏔',
+    label: 'Snowy Mountains',
+    params: {
+      sky: { zenith: '#2a8ae8', mid: '#8fd0f6', horizon: '#eaf7ff' },
+      clouds: 10,
+      sun: 1.35,
+      ground: '#f0f6fa',
+      grass: '#dcebf3',
+      particles: 'snow',
+      particleDensity: 55,
+      scenery: { density: 55, tree: '#2e7d4f', extra: 'snowman', set: 'snowy' },
+    },
+  },
+  {
+    key: 'city',
+    icon: '🏙',
+    label: 'Fun Block City',
+    params: {
+      sky: { zenith: '#1e90f0', mid: '#7cc4f8', horizon: '#d8f2ff' },
+      clouds: 10,
+      sun: 1.55,
+      ground: '#9fb3bd',
+      grass: '#8fd06c',
+      particles: 'none',
+      particleDensity: 0,
+      scenery: { density: 55, tree: '#49c53d', extra: 'none', set: 'city' },
+    },
+  },
+]
+
+/** Every pickable preset: seasons plus voxel worlds. */
+export const ALL_PRESETS = [...PRESETS, ...WORLDS]
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
@@ -123,6 +204,7 @@ export function newEnvDesign(params: EnvParams = SUMMER, name = 'My Environment'
 
 const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain']
 const EXTRAS: SceneryExtra[] = ['none', 'snowman', 'pumpkin', 'flowers']
+const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city']
 const color = (v: unknown, fb: string) =>
   typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fb
 const num = (v: unknown, fb: number, lo: number, hi: number) =>
@@ -149,6 +231,7 @@ export function coerceEnv(v: any): EnvDesign | null {
       density: Math.round(num(p.scenery?.density, SUMMER.scenery.density, 0, 100)),
       tree: color(p.scenery?.tree, SUMMER.scenery.tree),
       extra: EXTRAS.includes(p.scenery?.extra) ? p.scenery.extra : 'none',
+      set: SETS.includes(p.scenery?.set) ? p.scenery.set : 'classic',
     },
   }
   return {

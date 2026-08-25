@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
-import { EnvParams, PRESETS, cloneParams } from './env/model'
+import { ALL_PRESETS, EnvParams, cloneParams } from './env/model'
 import { loadEnvLibrary } from './env/library'
 import './setup.css'
 
@@ -88,9 +88,9 @@ export default function PlaySetup({
       .map((k) => byKey.get(k))
       .filter((o): o is Option => !!o)
       .map((o) => ({ designId: o.designId, colors: o.colors, name: o.name }))
-    const preset = PRESETS.find((pr) => `preset:${pr.key}` === envKey)
+    const preset = ALL_PRESETS.find((pr) => `preset:${pr.key}` === envKey)
     const saved = savedEnvs.find((d) => d.id === envKey)
-    const env = cloneParams(saved?.params ?? preset?.params ?? PRESETS[0].params)
+    const env = cloneParams(saved?.params ?? preset?.params ?? ALL_PRESETS[0].params)
     onGenerate({ picks, avgTime, obstaclePct, raceMode, env })
   }
 
@@ -164,7 +164,7 @@ export default function PlaySetup({
             </button>
           </div>
           <div className="env-row">
-            {PRESETS.map((pr) => (
+            {ALL_PRESETS.map((pr) => (
               <button
                 key={pr.key}
                 className={`env-chip ${envKey === `preset:${pr.key}` ? 'on' : ''}`}

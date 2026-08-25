@@ -55,42 +55,73 @@ function Dome({ zenith, mid, horizon }: { zenith: string; mid: string; horizon: 
 }
 
 function Sun() {
+  // A friendly cube sun with little ray blocks, matching the voxel look.
   // Sits along the key-light direction so shading matches the sky.
+  const rays = useMemo(
+    () =>
+      Array.from({ length: 8 }, (_, i) => {
+        const a = (i / 8) * Math.PI * 2
+        return {
+          pos: [Math.cos(a) * 46, Math.sin(a) * 46, 0] as [number, number, number],
+          s: i % 2 === 0 ? 9 : 6,
+        }
+      }),
+    [],
+  )
   return (
-    <group position={[240, 330, 150]}>
+    <group position={[240, 330, 150]} rotation={[0, Math.atan2(240, 150), 0]}>
       <mesh>
-        <circleGeometry args={[38, 40]} />
-        <meshBasicMaterial color="#fff6cf" fog={false} side={THREE.DoubleSide} />
+        <boxGeometry args={[52, 52, 10]} />
+        <meshBasicMaterial color="#ffe36b" fog={false} />
       </mesh>
-      <mesh position={[0, 0, -1]}>
-        <circleGeometry args={[62, 40]} />
-        <meshBasicMaterial color="#fff2b8" transparent opacity={0.35} fog={false} side={THREE.DoubleSide} />
+      <mesh position={[0, 0, -2]}>
+        <boxGeometry args={[68, 68, 6]} />
+        <meshBasicMaterial color="#ffd94f" transparent opacity={0.35} fog={false} />
       </mesh>
+      {rays.map((r, i) => (
+        <mesh key={i} position={r.pos}>
+          <boxGeometry args={[r.s, r.s, 6]} />
+          <meshBasicMaterial color="#ffe36b" fog={false} />
+        </mesh>
+      ))}
     </group>
   )
 }
 
-/** One puffy cloud: a few flattened white spheres in a row. */
+/** One voxel cloud: a flat-bottomed cluster of white boxes. */
 function Cloud({ seed }: { seed: number }) {
-  const puffs = useMemo(() => {
+  const blocks = useMemo(() => {
     const rnd = (i: number) => {
       // tiny deterministic hash so each cloud keeps its shape across renders
       const x = Math.sin(seed * 127.1 + i * 311.7) * 43758.5453
       return x - Math.floor(x)
     }
     const n = 3 + Math.floor(rnd(0) * 3)
-    return Array.from({ length: n }, (_, i) => ({
-      x: (i - (n - 1) / 2) * (13 + rnd(i + 1) * 4),
-      y: (rnd(i + 2) - 0.5) * 6,
-      r: 10 + rnd(i + 3) * 8,
-    }))
+    const out: { x: number; y: number; z: number; w: number; h: number }[] = []
+    for (let i = 0; i < n; i++) {
+      const w = 14 + rnd(i + 3) * 10
+      const h = 8 + rnd(i + 5) * 5
+      // Boxes share a flat base and stagger in x/z like stacked blocks.
+      out.push({
+        x: (i - (n - 1) / 2) * (11 + rnd(i + 1) * 5),
+        y: h / 2,
+        z: (rnd(i + 7) - 0.5) * 8,
+        w,
+        h,
+      })
+      // A smaller block riding on top of some segments.
+      if (rnd(i + 9) > 0.55) {
+        out.push({ x: out[out.length - 1].x + (rnd(i + 11) - 0.5) * 6, y: h + 3.5, z: 0, w: w * 0.55, h: 7 })
+      }
+    }
+    return out
   }, [seed])
   return (
     <group>
-      {puffs.map((p, i) => (
-        <mesh key={i} position={[p.x, p.y, 0]} scale={[1, 0.55, 0.8]}>
-          <sphereGeometry args={[p.r, 18, 12]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.92} fog={false} />
+      {blocks.map((b, i) => (
+        <mesh key={i} position={[b.x, b.y, b.z]}>
+          <boxGeometry args={[b.w, b.h, b.w * 0.8]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.94} fog={false} />
         </mesh>
       ))}
     </group>
