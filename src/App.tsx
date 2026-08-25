@@ -7,6 +7,7 @@ import { LANE_SPACING, LANE_WIDTH, NUM_LANES, buildTrack, sampleCenter } from '.
 import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
 import { loadLibrary } from './studio/library'
+import { loadBuiltins, mergeLibraries } from './studio/builtin'
 import Riders, { LeadState } from './track/Riders'
 import Podium, { PodiumEntry } from './track/Podium'
 import PlaySetup, { PlayConfig, RaceMode } from './PlaySetup'
@@ -132,7 +133,11 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   // or '' for that lane's default racer).
   const [saved, setSaved] = useState<AnimalDesign[]>(() => loadLibrary())
   const [laneAnimalIds, setLaneAnimalIds] = useState<string[]>(() => Array(NUM_LANES).fill(''))
-  const refreshSaved = () => setSaved(loadLibrary())
+  const refreshSaved = () => loadBuiltins().then((b) => setSaved(mergeLibraries(loadLibrary(), b)))
+  useEffect(() => {
+    refreshSaved()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // App view: the quick-play setup screen, the classic builder, or immersive play.
   const [mode, setMode] = useState<'setup' | 'build' | 'play'>('setup')

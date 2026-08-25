@@ -22,7 +22,7 @@ import {
   loadLibrary,
   upsertDesign,
 } from './library'
-import { coerceDesign } from './model'
+import { isBuiltinId, loadBuiltins, mergeLibraries } from './builtin'
 import './studio.css'
 
 const CLIP_META: Record<Clip, { icon: string; label: string }> = {
@@ -47,6 +47,12 @@ export default function AnimalStudio({
   const [clip, setClip] = useState<Clip>('walk')
   const [playing, setPlaying] = useState(true)
   const [library, setLibrary] = useState<AnimalDesign[]>(() => loadLibrary())
+  // Bundled pack animals: always available, never stored in localStorage.
+  const [builtins, setBuiltins] = useState<AnimalDesign[]>([])
+  useEffect(() => {
+    loadBuiltins().then(setBuiltins)
+  }, [])
+  const fullLibrary = useMemo(() => mergeLibraries(library, builtins), [library, builtins])
   const [showLibrary, setShowLibrary] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -143,34 +149,6 @@ export default function AnimalStudio({
     load(d)
     setSelectedId(null)
   }
-  // Load the bundled 20-animal pack (public/animal-pack) into the library.
-  // Existing entries with the same pack id are updated, so it also restores
-  // accidentally deleted animals.
-  const loadPack = async () => {
-    try {
-      const base = import.meta.env.BASE_URL
-      const manifest: { name: string; file: string }[] = await fetch(
-        `${base}animal-pack/manifest.json`,
-      ).then((r) => r.json())
-      const designs = (
-        await Promise.all(
-          manifest.map((m) =>
-            fetch(`${base}animal-pack/${m.file}`)
-              .then((r) => r.json())
-              .then((j) => coerceDesign(j))
-              .catch(() => null),
-          ),
-        )
-      ).filter(Boolean) as AnimalDesign[]
-      if (designs.length === 0) throw new Error('empty')
-      setLibrary((lib) => designs.reduce((l, d) => upsertDesign(l, d), lib))
-      setShowLibrary(true)
-      alert(`Loaded ${designs.length} pack animals into the library.`)
-    } catch {
-      alert('Could not load the bundled animal pack.')
-    }
-  }
-
   // Import one or many .animal.json files. A single file opens in the editor
   // (as before); a batch is saved straight into the library.
   const onImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -248,15 +226,12 @@ export default function AnimalStudio({
           <button className="mini" onClick={() => fileInput.current?.click()} title="Import JSON (select several for a batch)">
             ⬆︎
           </button>
-          <button className="mini" onClick={loadPack} title="Load the bundled 20-animal pack (restores deleted ones)">
-            📦 Pack
-          </button>
           <button
             className={`mini ${showLibrary ? 'on' : ''}`}
             onClick={() => setShowLibrary((v) => !v)}
             title="Your saved animals"
           >
-            📚 {library.length}
+            📚 {fullLibrary.length}
           </button>
           <input
             ref={fileInput}
@@ -308,15 +283,19 @@ export default function AnimalStudio({
               <span>Saved animals</span>
               <button className="sbtn" onClick={() => setShowLibrary(false)}>✕</button>
             </div>
-            {library.length === 0 && <p className="lib-empty">Nothing saved yet. Hit 💾 Save.</p>}
+            {fullLibrary.length === 0 && <p className="lib-empty">Nothing saved yet. Hit 💾 Save.</p>}
             <div className="lib-list">
-              {library.map((d) => (
+              {fullLibrary.map((d) => (
                 <div key={d.id} className="lib-row">
                   <button className="lib-load" onClick={() => loadDesign(d)}>
                     <b>{d.name}</b>
                     <span>{d.blocks.length} blocks</span>
                   </button>
-                  <button className="sbtn" title="Delete" onClick={() => removeFromLibrary(d.id)}>🗑</button>
+                  {isBuiltinId(builtins, d.id) && !library.some((c) => c.id === d.id) ? (
+                    <span className="sbtn" title="Bundled pack animal — always available">📦</span>
+                  ) : (
+                    <button className="sbtn" title="Delete" onClick={() => removeFromLibrary(d.id)}>🗑</button>
+                  )}
                 </div>
               ))}
             </div>
