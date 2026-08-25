@@ -398,6 +398,412 @@ function fragmentParts(): Part[] {
   ]
 }
 
+// ---- Ice: cracked pale sheet with snow rim and shard clusters -------------
+function iceParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.24
+  for (let gx = -4; gx <= 4; gx++)
+    for (let gz = -14; gz <= 14; gz++) {
+      const x = gx * u
+      const z = gz * u
+      const e = (x * x) / (0.92 * 0.92) + (z * z) / (3.2 * 3.2)
+      if (e <= 1) {
+        const crack = (gx * 3 + gz * 2) % 9 === 0 || (gx - gz) % 7 === 0
+        parts.push({ p: [x, 0.05, z], s: [u, 0.1, u], c: crack ? '#ffffff' : '#cfe8f6', j: 0.06 })
+      } else if (e <= 1.4) {
+        parts.push({ p: [x, 0.07, z], s: [u, 0.14, u], c: '#f2f8fc', j: 0.05 })
+      }
+    }
+  for (const [sx, sz] of [[-0.5, -2.2], [0.55, 0.4], [-0.3, 2.3]] as const) {
+    parts.push({ p: [sx, 0.25, sz], s: [0.3, 0.4, 0.3], c: '#bfe4f6', j: 0.08 })
+    parts.push({ p: [sx + 0.2, 0.18, sz + 0.15], s: [0.2, 0.26, 0.2], c: '#dff2fc', j: 0.06 })
+    parts.push({ p: [sx - 0.1, 0.5, sz - 0.05], s: [0.16, 0.24, 0.16], c: '#eaf7ff', j: 0.05 })
+  }
+  return parts
+}
+
+// ---- Web: radial ground web with posts and a lurking spider ---------------
+function webParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.2
+  // spokes
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2
+    for (let r = 1; r <= 10; r++) {
+      parts.push({
+        p: [Math.cos(a) * r * u * 0.55, 0.05, Math.sin(a) * r * u * 1.2],
+        s: [0.12, 0.05, 0.12],
+        c: '#e8eef2',
+        j: 0.06,
+      })
+    }
+  }
+  // rings
+  for (const rr of [0.45, 0.8]) {
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2
+      parts.push({ p: [Math.cos(a) * rr, 0.06, Math.sin(a) * rr * 2.1], s: [0.1, 0.05, 0.1], c: '#dde6ec', j: 0.06 })
+    }
+  }
+  // anchor posts (dead branches)
+  for (const [px, pz] of [[-0.95, -1.9], [0.95, -1.6], [-0.9, 1.8], [0.95, 2.0]] as const) {
+    for (let y = 0; y < 4; y++) parts.push({ p: [px, 0.12 + y * 0.2, pz], s: [0.13, 0.2, 0.13], c: '#6d4a2c', j: 0.1 })
+    parts.push({ p: [px + 0.12, 0.85, pz], s: [0.2, 0.1, 0.1], c: '#5a3c22', j: 0.1 })
+  }
+  // spider at the centre
+  parts.push({ p: [0.3, 0.16, 0.6], s: [0.24, 0.2, 0.26], c: '#2a2a32', j: 0.06 })
+  parts.push({ p: [0.3, 0.14, 0.42], s: [0.16, 0.14, 0.14], c: '#2a2a32', j: 0.06 })
+  parts.push({ p: [0.25, 0.18, 0.36], s: [0.04, 0.04, 0.03], c: '#e02e2e', j: 0.02 })
+  parts.push({ p: [0.35, 0.18, 0.36], s: [0.04, 0.04, 0.03], c: '#e02e2e', j: 0.02 })
+  for (const sx of [-1, 1])
+    for (let i = 0; i < 3; i++)
+      parts.push({ p: [0.3 + sx * 0.2, 0.1, 0.45 + i * 0.12], s: [0.16, 0.04, 0.04], c: '#1c1c22', j: 0.05 })
+  return parts
+}
+
+// ---- Magnet: a giant horseshoe arching over the lane ----------------------
+function magnetParts(): { base: Part[]; glow: Part[] } {
+  const base: Part[] = []
+  const glow: Part[] = []
+  const u = 0.22
+  for (const sx of [-1, 1]) {
+    // vertical arms
+    for (let y = 0; y < 8; y++) base.push({ p: [sx * 0.65, 0.55 + y * u, 0.9], s: [u * 1.4, u, u * 1.4], c: '#e53935', j: 0.07 })
+    // white pole tips
+    for (let y = 0; y < 2; y++) base.push({ p: [sx * 0.65, 0.2 + y * u * 0.8, 0.9], s: [u * 1.5, u * 0.8, u * 1.5], c: '#f6f6f2', j: 0.04 })
+  }
+  // arch across the top
+  for (let i = 0; i <= 6; i++) {
+    const a = (i / 6) * Math.PI
+    base.push({
+      p: [-Math.cos(a) * 0.65, 2.3 + Math.sin(a) * 0.42, 0.9],
+      s: [u * 1.4, u * 1.2, u * 1.4],
+      c: '#c62828',
+      j: 0.07,
+    })
+  }
+  // crackle sparks between the poles + along the zone
+  for (let i = 0; i < 8; i++) {
+    glow.push({
+      p: [(rnd(i * 7) - 0.5) * 1.1, 0.14 + rnd(i * 11) * 0.35, 0.6 - rnd(i * 13) * 3.4],
+      s: [0.09, 0.09, 0.09],
+      c: i % 2 ? '#fff6a8' : '#9be8ff',
+      j: 0.03,
+    })
+  }
+  return { base, glow }
+}
+
+// ---- Fire: dark grate with nozzles; flame column is animated separately ---
+function fireBaseParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.22
+  for (let gx = -3; gx <= 3; gx++)
+    for (let gz = -9; gz <= 9; gz++) {
+      const hole = (gx + gz) % 2 === 0
+      parts.push({ p: [gx * u, 0.045, gz * u], s: [u, 0.09, u], c: hole ? '#2a2a32' : '#3d3d46', j: 0.08 })
+    }
+  for (const nz of [-1.5, -0.5, 0.5, 1.5]) {
+    for (let gx = -1; gx <= 1; gx++)
+      for (let gz = -1; gz <= 1; gz++)
+        parts.push({ p: [gx * u * 0.8, 0.13, nz + gz * u * 0.8], s: [u * 0.8, 0.1, u * 0.8], c: '#5a4632', j: 0.08 })
+    parts.push({ p: [0, 0.2, nz], s: [0.24, 0.08, 0.24], c: '#8a5a34', j: 0.06 })
+  }
+  return parts
+}
+
+function fireFlameParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.16
+  for (let y = 0; y < 8; y++) {
+    const r = y < 5 ? 1 : 0
+    const c = y < 3 ? '#ff6a1a' : y < 6 ? '#ffb52e' : '#fff6a8'
+    for (let gx = -r; gx <= r; gx++)
+      for (let gz = -r; gz <= r; gz++) {
+        if (Math.abs(gx) + Math.abs(gz) > r + (y % 2)) continue
+        parts.push({ p: [gx * u, 0.1 + y * u, gz * u], s: [u, u, u], c, j: 0.12 })
+      }
+  }
+  parts.push({ p: [0.2, 0.75, 0.1], s: [0.1, 0.16, 0.1], c: '#ffb52e', j: 0.1 })
+  parts.push({ p: [-0.18, 0.95, -0.1], s: [0.09, 0.14, 0.09], c: '#fff6a8', j: 0.1 })
+  return parts
+}
+
+// ---- Pendulum: gallows frame + swinging voxel axe -------------------------
+function pendFrameParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.22
+  for (const sx of [-1, 1]) {
+    for (let y = 0; y < 12; y++) {
+      parts.push({ p: [sx * 1.25, 0.11 + y * u, 0], s: [u, u, u], c: y % 3 === 0 ? '#8a5a34' : '#9c6b3f', j: 0.09 })
+    }
+    // base feet
+    for (const dz of [-0.28, 0.28]) parts.push({ p: [sx * 1.25, 0.08, dz], s: [u, 0.16, u], c: '#7a4e26', j: 0.08 })
+  }
+  const n = Math.round(2.5 / u)
+  for (let i = 0; i <= n; i++) {
+    parts.push({ p: [-1.25 + i * u, 2.75, 0], s: [u, u, u], c: i % 2 ? '#9c6b3f' : '#8a5a34', j: 0.09 })
+  }
+  // corner braces
+  for (const sx of [-1, 1]) parts.push({ p: [sx * 0.95, 2.5, 0], s: [0.3, 0.12, 0.12], c: '#7a4e26', j: 0.08 })
+  return parts
+}
+
+function pendBladeParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.16
+  for (let y = 0; y < 11; y++) parts.push({ p: [0, -y * u, 0], s: [0.12, u, 0.12], c: y % 2 ? '#9c6b3f' : '#8a5a34', j: 0.08 })
+  // double axe head at the tip
+  for (const sx of [-1, 1])
+    for (let gx = 1; gx <= 3; gx++)
+      for (let gy = -2; gy <= 2; gy++) {
+        if (Math.abs(gy) === 2 && gx < 3) continue
+        parts.push({
+          p: [sx * gx * u, -1.76 + gy * u, 0],
+          s: [u, u, 0.14],
+          c: gx === 3 ? '#eceff1' : '#90a4ae',
+          j: 0.07,
+        })
+      }
+  parts.push({ p: [0, -1.76, 0], s: [0.18, 0.5, 0.18], c: '#546e7a', j: 0.07 })
+  return parts
+}
+
+// ---- Geyser: stone crater + animated water jet ----------------------------
+function geyserBaseParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.2
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2
+    const r = 0.55 + rnd(i * 3) * 0.1
+    parts.push({ p: [Math.cos(a) * r, 0.12, Math.sin(a) * r], s: [u * 1.2, 0.24 + rnd(i * 7) * 0.14, u * 1.2], c: i % 2 ? '#7d8894' : '#8f99a6', j: 0.12 })
+  }
+  for (let gx = -2; gx <= 2; gx++)
+    for (let gz = -2; gz <= 2; gz++) {
+      if (Math.abs(gx) + Math.abs(gz) > 3) continue
+      parts.push({ p: [gx * u, 0.04, gz * u], s: [u, 0.08, u], c: '#4db4f5', j: 0.12 })
+    }
+  return parts
+}
+
+function geyserJetParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.18
+  for (let y = 0; y < 12; y++) {
+    for (const [dx, dz] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]] as const) {
+      parts.push({
+        p: [dx * u + (rnd(y * 3 + dx) - 0.5) * 0.06, 0.1 + y * u, dz * u + (rnd(y * 5 + dz) - 0.5) * 0.06],
+        s: [u, u, u],
+        c: y % 3 === 0 ? '#bfe8fb' : '#4db4f5',
+        j: 0.1,
+      })
+    }
+  }
+  // splash crown
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2
+    parts.push({ p: [Math.cos(a) * 0.42, 2.3, Math.sin(a) * 0.42], s: [0.14, 0.14, 0.14], c: '#ffffff', j: 0.05 })
+  }
+  return parts
+}
+
+// ---- Chomper: crocodile head; upper jaw is animated -----------------------
+function chomperBaseParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.2
+  // lower jaw + body stump
+  for (let gx = -3; gx <= 3; gx++)
+    for (let gz = -3; gz <= 4; gz++) {
+      parts.push({ p: [gx * u, 0.1, gz * u - 0.2], s: [u, 0.2, u], c: (gx + gz) % 2 ? '#5da33c' : '#549638', j: 0.1 })
+    }
+  // lower teeth
+  for (let gx = -3; gx <= 3; gx += 2) parts.push({ p: [gx * u, 0.26, -0.85], s: [0.1, 0.14, 0.08], c: '#ffffff', j: 0.03 })
+  for (const sx of [-1, 1]) {
+    parts.push({ p: [sx * 0.44, 0.24, 0.35], s: [0.14, 0.1, 0.2], c: '#417a28', j: 0.08 })
+  }
+  return parts
+}
+
+function chomperJawParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.2
+  // upper snout (pivot at origin = hinge at the back)
+  for (let gx = -3; gx <= 3; gx++)
+    for (let gz = 0; gz <= 6; gz++) {
+      const top = gz > 4
+      parts.push({ p: [gx * u, 0.12, -gz * u], s: [u, 0.24, u], c: top ? '#417a28' : '#4c8a30', j: 0.1 })
+    }
+  // eyes on top of the hinge end
+  for (const sx of [-1, 1]) {
+    parts.push({ p: [sx * 0.4, 0.34, -0.15], s: [0.2, 0.2, 0.2], c: '#4c8a30', j: 0.06 })
+    parts.push({ p: [sx * 0.4, 0.42, -0.24], s: [0.1, 0.1, 0.06], c: '#f8d21c', j: 0.03 })
+    parts.push({ p: [sx * 0.4, 0.42, -0.28], s: [0.05, 0.08, 0.03], c: '#1c1c1c', j: 0.02 })
+  }
+  // upper teeth along the front edge
+  for (let gx = -2; gx <= 2; gx += 2) parts.push({ p: [gx * u, -0.04, -1.24], s: [0.1, 0.16, 0.08], c: '#ffffff', j: 0.03 })
+  // nostril bumps
+  parts.push({ p: [-0.15, 0.28, -1.2], s: [0.12, 0.1, 0.12], c: '#417a28', j: 0.06 })
+  parts.push({ p: [0.15, 0.28, -1.2], s: [0.12, 0.1, 0.12], c: '#417a28', j: 0.06 })
+  return parts
+}
+
+// ---- Fan: caged rotor at the zone end; blades + wind streaks animated -----
+function fanFrameParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.2
+  // pedestal
+  for (let y = 0; y < 3; y++) parts.push({ p: [0, 0.1 + y * u, 2.7], s: [0.5 - y * 0.08, u, 0.4], c: '#546e7a', j: 0.08 })
+  // guard ring
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2
+    parts.push({ p: [Math.cos(a) * 1.0, 1.15 + Math.sin(a) * 1.0, 2.7], s: [0.14, 0.14, 0.16], c: i % 2 ? '#90a4ae' : '#78909c', j: 0.07 })
+  }
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2
+    parts.push({ p: [Math.cos(a) * 0.62, 1.15 + Math.sin(a) * 0.62, 2.78], s: [0.08, 0.08, 0.06], c: '#b0bec5', j: 0.05 })
+  }
+  return parts
+}
+
+function fanBladeParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.16
+  parts.push({ p: [0, 0, 0], s: [0.3, 0.3, 0.24], c: '#37474f', j: 0.05 })
+  for (let b = 0; b < 4; b++) {
+    const a = (b / 4) * Math.PI * 2
+    for (let r = 1; r <= 5; r++) {
+      const w = 0.3 - r * 0.03
+      parts.push({
+        p: [Math.cos(a) * r * u, Math.sin(a) * r * u, 0],
+        s: [w, w, 0.1],
+        c: b % 2 ? '#eceff1' : '#cfd8dc',
+        j: 0.06,
+      })
+    }
+  }
+  return parts
+}
+
+function fanWindParts(): Part[] {
+  const parts: Part[] = []
+  for (let i = 0; i < 14; i++) {
+    const x = (rnd(i * 3) - 0.5) * 1.6
+    const y = 0.4 + rnd(i * 5) * 1.2
+    const z = 2.0 - rnd(i * 7) * 4.6
+    parts.push({ p: [x, y, z], s: [0.08, 0.08, 0.5 + rnd(i * 11) * 0.5], c: i % 3 ? '#eaf7ff' : '#bfe8fb', j: 0.04 })
+  }
+  return parts
+}
+
+// ---- Banana: a big splayed peel ------------------------------------------
+function bananaParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.16
+  parts.push({ p: [0, 0.1, 0], s: [0.5, 0.16, 0.5], c: '#f8e8b0', j: 0.06 })
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + 0.4
+    const dx = Math.cos(a)
+    const dz = Math.sin(a)
+    for (let r = 1; r <= 4; r++) {
+      const lift = r === 4 ? 0.34 : r * 0.05
+      parts.push({
+        p: [dx * r * u * 1.3, 0.08 + lift, dz * r * u * 1.3],
+        s: [0.24 - r * 0.02, 0.12, 0.24 - r * 0.02],
+        c: r === 4 ? '#8a5a34' : '#f6c62e',
+        j: 0.08,
+      })
+    }
+  }
+  for (let i = 0; i < 6; i++) {
+    parts.push({ p: [(rnd(i * 7) - 0.5) * 0.7, 0.19, (rnd(i * 13) - 0.5) * 0.7], s: [0.08, 0.04, 0.08], c: '#b5793b', j: 0.08 })
+  }
+  return parts
+}
+
+// ---- Portal: standing swirl rings (blue entry, orange exit) ---------------
+function portalRingParts(main: string, dark: string): Part[] {
+  const parts: Part[] = []
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2
+    parts.push({
+      p: [Math.cos(a) * 0.95, 1.15 + Math.sin(a) * 0.95, 0],
+      s: [0.2, 0.2, 0.16],
+      c: i % 2 ? main : dark,
+      j: 0.06,
+    })
+  }
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.3
+    parts.push({
+      p: [Math.cos(a) * 0.55, 1.15 + Math.sin(a) * 0.55, 0.04],
+      s: [0.12, 0.12, 0.08],
+      c: '#ffffff',
+      j: 0.04,
+    })
+  }
+  // base feet
+  for (const sx of [-1, 1]) {
+    parts.push({ p: [sx * 0.85, 0.12, 0], s: [0.3, 0.24, 0.4], c: '#546e7a', j: 0.08 })
+    parts.push({ p: [sx * 0.85, 0.3, 0], s: [0.2, 0.14, 0.28], c: dark, j: 0.06 })
+  }
+  return parts
+}
+
+// ---- Log: rolling voxel log (spans the lane, animated) --------------------
+function logParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.17
+  const R = 0.3
+  for (let gx = -6; gx <= 6; gx++) {
+    const cap = Math.abs(gx) === 6
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      parts.push({
+        p: [gx * u, Math.sin(a) * R, Math.cos(a) * R],
+        s: [u, 0.16, 0.16],
+        c: cap ? '#c9a06a' : i % 2 ? '#8a5a34' : '#7a4e26',
+        j: 0.1,
+      })
+    }
+    if (cap) {
+      parts.push({ p: [gx * u * 1.05, 0, 0], s: [u * 0.7, 0.3, 0.3], c: '#e0c090', j: 0.06 })
+      parts.push({ p: [gx * u * 1.08, 0, 0], s: [u * 0.5, 0.16, 0.16], c: '#b5895a', j: 0.06 })
+    }
+  }
+  // a knot
+  parts.push({ p: [0.3, 0.28, 0.12], s: [0.12, 0.1, 0.1], c: '#5a3c22', j: 0.06 })
+  return parts
+}
+
+// ---- Ring: floating bonus hoop with sparkles ------------------------------
+function ringBaseParts(): Part[] {
+  const parts: Part[] = []
+  const u = 0.18
+  for (const sx of [-1, 1]) {
+    for (let y = 0; y < 6; y++) parts.push({ p: [sx * 1.05, 0.1 + y * u, 0], s: [0.14, u, 0.14], c: '#546e7a', j: 0.08 })
+    parts.push({ p: [sx * 1.05, 0.06, 0], s: [0.3, 0.12, 0.3], c: '#37474f', j: 0.06 })
+  }
+  return parts
+}
+
+function ringGlowParts(): Part[] {
+  const parts: Part[] = []
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2
+    parts.push({
+      p: [Math.cos(a) * 0.9, 1.2 + Math.sin(a) * 0.9, 0],
+      s: [0.18, 0.18, 0.14],
+      c: i % 2 ? '#ffd21a' : '#fff6a8',
+      j: 0.05,
+    })
+  }
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + 0.5
+    parts.push({ p: [Math.cos(a) * 1.25, 1.2 + Math.sin(a) * 1.25, 0], s: [0.09, 0.09, 0.09], c: '#ffffff', j: 0.03 })
+  }
+  return parts
+}
+
 // ---- Shared geometries + materials (built once at module load) ------------
 export const OBSTACLE_GEO = {
   water: geo(waterParts()),
@@ -413,6 +819,27 @@ export const OBSTACLE_GEO = {
   spinnerArm: geo(spinnerArmParts()),
   crateStack: geo(crateStackParts()),
   crateFragment: geo(fragmentParts()),
+  ice: geo(iceParts()),
+  web: geo(webParts()),
+  magnetBase: geo(magnetParts().base),
+  magnetGlow: geo(magnetParts().glow),
+  fireBase: geo(fireBaseParts()),
+  fireFlame: geo(fireFlameParts()),
+  pendFrame: geo(pendFrameParts()),
+  pendBlade: geo(pendBladeParts()),
+  geyserBase: geo(geyserBaseParts()),
+  geyserJet: geo(geyserJetParts()),
+  chomperBase: geo(chomperBaseParts()),
+  chomperJaw: geo(chomperJawParts()),
+  fanFrame: geo(fanFrameParts()),
+  fanBlades: geo(fanBladeParts()),
+  fanWind: geo(fanWindParts()),
+  banana: geo(bananaParts()),
+  portalEntry: geo(portalRingParts('#2e8ae8', '#1a5fb0')),
+  portalExit: geo(portalRingParts('#f28c3c', '#c05f14')),
+  log: geo(logParts()),
+  ringBase: geo(ringBaseParts()),
+  ringGlow: geo(ringGlowParts()),
 }
 
 export const OBSTACLE_MAT = new THREE.MeshStandardMaterial({

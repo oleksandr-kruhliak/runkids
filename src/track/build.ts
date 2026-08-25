@@ -43,6 +43,8 @@ export interface LaneObstacle {
   len: number
   start: number
   end: number
+  /** Portal only: signed distance the racer is thrown on entry. */
+  delta?: number
 }
 
 export interface Lane {
@@ -62,6 +64,9 @@ export interface ObstaclePlacement {
   phase: number
   lane: number
   dist: number
+  /** Portal only: where the exit ring sits on the track. */
+  exitPosition?: [number, number, number]
+  exitQuaternion?: [number, number, number, number]
 }
 
 // --- Timed obstacle behavior (shared by visuals and rider logic) ---
@@ -70,6 +75,62 @@ export const STOPPER_DOWN = 3 // seconds lowered (clear)
 export const SPIN_AMP = 4.0 // swing amplitude (rad) — the hammer swings ±this, reversing direction
 export const SPIN_RATE = 2.4 // swing rate (faster -> strikes the lane more often)
 export const SPINNER_WINDOW = 1.4 // rad half-window where the hammer is over the lane
+
+// Rhythms for the timed obstacle family (all pure functions of phase + time).
+export const FIRE_PERIOD = 4
+export const FIRE_ON = 1.3
+export function fireOn(phase: number, t: number): boolean {
+  let p = (t + phase) % FIRE_PERIOD
+  if (p < 0) p += FIRE_PERIOD
+  return p < FIRE_ON
+}
+
+/** Pendulum axe swing angle (radians about the top pivot). */
+export function pendulumAngle(phase: number, t: number): number {
+  return Math.sin((t + phase) * 1.9) * 0.85
+}
+
+/** Did the blade sweep through the lane centre during this frame? */
+export function pendulumStruck(phase: number, t: number, dt: number): boolean {
+  const a0 = pendulumAngle(phase, t - dt)
+  const a1 = pendulumAngle(phase, t)
+  return a0 * a1 <= 0 && Math.abs(a1) < 0.5
+}
+
+export const GEYSER_PERIOD = 5
+export const GEYSER_ON = 1.0
+export function geyserOn(phase: number, t: number): boolean {
+  let p = (t + phase) % GEYSER_PERIOD
+  if (p < 0) p += GEYSER_PERIOD
+  return p < GEYSER_ON
+}
+
+export const CHOMP_PERIOD = 3.6
+export const CHOMP_CLOSED = 1.4
+export function chomperClosed(phase: number, t: number): boolean {
+  let p = (t + phase) % CHOMP_PERIOD
+  if (p < 0) p += CHOMP_PERIOD
+  return p < CHOMP_CLOSED
+}
+
+export const FAN_PERIOD = 6
+export const FAN_ON = 2.2
+export function fanOn(phase: number, t: number): boolean {
+  let p = (t + phase) % FAN_PERIOD
+  if (p < 0) p += FAN_PERIOD
+  return p < FAN_ON
+}
+
+export const LOG_PERIOD = 4.2
+/** Rolling log progress 0..1 through its zone (rolls back toward the start). */
+export function logU(phase: number, t: number): number {
+  let p = (t + phase) % LOG_PERIOD
+  if (p < 0) p += LOG_PERIOD
+  return p / LOG_PERIOD
+}
+
+/** How far a portal throws the racer (signed; most jump forward). */
+export const PORTAL_JUMP = 7
 
 /** Is a stopper (identified by its phase) currently raised? */
 export function stopperUp(phase: number, t: number): boolean {
@@ -326,7 +387,13 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
     const obstacles: LaneObstacle[] = types.map((type, j) => {
       const dist = length * ((j + 1) / (k + 1))
       const len = OBSTACLE_LEN[type] || 4
-      return { type, dist, len, start: dist - len / 2, end: dist + len / 2 }
+      const o: LaneObstacle = { type, dist, len, start: dist - len / 2, end: dist + len / 2 }
+      if (type === 'portal') {
+        // Deterministic per-spot: most portals throw forward, some backward.
+        const h = Math.sin(dist * 12.9898) * 43758.5453
+        o.delta = h - Math.floor(h) > 0.3 ? PORTAL_JUMP : -PORTAL_JUMP
+      }
+      return o
     })
 
     const gaps = obstacles
@@ -341,20 +408,30 @@ export function buildTrack(shape: PieceType[], laneObstacles: PieceType[][]): Tr
       obstacles,
     })
 
+    const TIMED = new Set<PieceType>(['stopper', 'spinner', 'fire', 'pendulum', 'geyser', 'chomper', 'fan', 'log'])
     for (const o of obstacles) {
       const f = sampleCenter(center, o.dist)
       const p = f.pos.clone().addScaledVector(f.right, offset)
-      placements.push({
+      const placement: ObstaclePlacement = {
         key: `${l}-${o.dist.toFixed(1)}-${o.type}`,
         type: o.type,
         position: [p.x, p.y, p.z],
         quaternion: frameQuaternion(f),
         length: o.len,
         // Desync timed obstacles by seeding phase from position.
-        phase: o.type === 'stopper' || o.type === 'spinner' ? o.dist : 0,
+        phase: TIMED.has(o.type) ? o.dist : 0,
         lane: l,
         dist: o.dist,
-      })
+      }
+      if (o.type === 'portal' && o.delta != null && length > 0) {
+        let exitD = (o.dist + o.delta) % length
+        if (exitD < 0) exitD += length
+        const ef = sampleCenter(center, exitD)
+        const ep = ef.pos.clone().addScaledVector(ef.right, offset)
+        placement.exitPosition = [ep.x, ep.y, ep.z]
+        placement.exitQuaternion = frameQuaternion(ef)
+      }
+      placements.push(placement)
     }
   }
 

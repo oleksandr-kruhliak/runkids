@@ -13,6 +13,18 @@ export type PieceType =
   | 'stopper'
   | 'spinner'
   | 'crates'
+  | 'ice'
+  | 'web'
+  | 'magnet'
+  | 'fire'
+  | 'pendulum'
+  | 'geyser'
+  | 'chomper'
+  | 'fan'
+  | 'banana'
+  | 'portal'
+  | 'log'
+  | 'ring'
 
 export type PieceGroup = 'shape' | 'obstacle'
 
@@ -30,6 +42,18 @@ export const OBSTACLE_PIECES: PieceType[] = [
   'stopper',
   'spinner',
   'crates',
+  'ice',
+  'web',
+  'magnet',
+  'fire',
+  'pendulum',
+  'geyser',
+  'chomper',
+  'fan',
+  'banana',
+  'portal',
+  'log',
+  'ring',
 ]
 
 export const PIECE_META: Record<
@@ -50,6 +74,18 @@ export const PIECE_META: Record<
   stopper: { label: 'Stopper', icon: '🛑', group: 'obstacle' },
   spinner: { label: 'Spinner', icon: '🌀', group: 'obstacle' },
   crates: { label: 'Crates', icon: '📦', group: 'obstacle' },
+  ice: { label: 'Ice', icon: '🧊', group: 'obstacle' },
+  web: { label: 'Web', icon: '🕸', group: 'obstacle' },
+  magnet: { label: 'Magnet', icon: '🧲', group: 'obstacle' },
+  fire: { label: 'Fire', icon: '🔥', group: 'obstacle' },
+  pendulum: { label: 'Axe', icon: '🪓', group: 'obstacle' },
+  geyser: { label: 'Geyser', icon: '⛲', group: 'obstacle' },
+  chomper: { label: 'Chomper', icon: '🐊', group: 'obstacle' },
+  fan: { label: 'Fan', icon: '💨', group: 'obstacle' },
+  banana: { label: 'Banana', icon: '🍌', group: 'obstacle' },
+  portal: { label: 'Portal', icon: '🌀', group: 'obstacle' },
+  log: { label: 'Log', icon: '🪵', group: 'obstacle' },
+  ring: { label: 'Ring', icon: '⭕', group: 'obstacle' },
 }
 
 // Shape geometry (world units).
@@ -78,6 +114,18 @@ export const OBSTACLE_LEN: Record<PieceType, number> = {
   stopper: 3,
   spinner: 4,
   crates: 3,
+  ice: 7,
+  web: 5,
+  magnet: 6,
+  fire: 5,
+  pendulum: 3,
+  geyser: 3,
+  chomper: 3,
+  fan: 6,
+  banana: 2,
+  portal: 2,
+  log: 7,
+  ring: 3,
 }
 
 // Rider speed multiplier while inside an obstacle's zone. Stopper is handled by
@@ -98,4 +146,18 @@ export const SPEED_MULT: Record<PieceType, number> = {
   stopper: 1,
   spinner: 0.35,
   crates: 0.8,
+  // Ice speeds you up but you skid; web and magnet drag hard; the rest are
+  // timed/event obstacles handled by their own rider logic.
+  ice: 1.35,
+  web: 0.3,
+  magnet: 0.45,
+  fire: 1,
+  pendulum: 0.85,
+  geyser: 1,
+  chomper: 1,
+  fan: 1,
+  banana: 1,
+  portal: 1,
+  log: 0.9,
+  ring: 2.3,
 }

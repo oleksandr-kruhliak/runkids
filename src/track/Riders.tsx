@@ -4,8 +4,14 @@ import * as THREE from 'three'
 import {
   RIDE_OFFSET,
   Track,
+  chomperClosed,
+  fanOn,
+  fireOn,
+  geyserOn,
   jumpOffset,
   laneEffect,
+  logU,
+  pendulumStruck,
   sampleCenter,
   speedMultiplier,
   spinnerStruck,
@@ -134,6 +140,9 @@ const STOP_HOLD_AHEAD = 0.6 // how far before a raised stopper an animal halts
 const KNOCK_SPEED = 7 // how fast the hammer flings the animal
 const KNOCK_DUR = 0.8 // how long the knock lasts after a hit (seconds)
 const MUD_SLOW = 0.25 // speed multiplier at full mud stickiness
+const HOP_DUR = 0.9 // seconds airborne on a geyser jet
+const HOP_HEIGHT = 2.4
+const SPIN_OUT_DUR = 0.8 // seconds of banana-peel stumble
 const MUD_LINGER = 0.9 // seconds mud keeps slowing the animal after it leaves
 const GROUP_SCALE = 0.82 // rider group scale (applies to primitive + 3D)
 
@@ -163,6 +172,9 @@ export default function Riders({
   const knockDir = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Per-lane mud stickiness (1 while in mud, decays after leaving).
   const mudStick = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
+  // Geyser hop (launch window), banana spin-out, and one-shot event guards.
+  const hopStart = useRef<number[]>(Array.from({ length: MAX_LANES }, () => -99))
+  const spinStart = useRef<number[]>(Array.from({ length: MAX_LANES }, () => -99))
   // Per-lane current forward speed, so the 3D models can play a run/idle
   // animation that matches whether the animal is actually moving.
   const speedRef = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
@@ -179,6 +191,8 @@ export default function Riders({
       knockUntil.current[l] = 0
       knockDir.current[l] = 0
       mudStick.current[l] = 0
+      hopStart.current[l] = -99
+      spinStart.current[l] = -99
       speedRef.current[l] = 0
       distancesRef.current[l] = 0
       finished.current[l] = false
@@ -227,21 +241,46 @@ export default function Riders({
         let lap = len > 0 ? dist.current[l] % len : dist.current[l]
         if (lap < 0) lap += len
 
-        // Timed obstacles: hold at a raised stopper; a spinning hammer hit
-        // launches a lasting impulse in its swing direction (front -> back,
-        // back -> forward).
+        // Timed obstacles: hold at a raised stopper or a closed chomper; hits
+        // from the spinner, fire jets, and pendulum axe launch an impulse.
         let hold = false
+        let fanPush = false
+        let logPush = false
         for (const o of lane.obstacles) {
+          const inZone = lap >= o.start && lap <= o.end
           if (o.type === 'stopper' && stopperUp(o.dist, t)) {
+            let ahead = o.dist - lap
+            if (ahead < 0) ahead += len
+            if (ahead < STOP_HOLD_AHEAD) hold = true
+          } else if (o.type === 'chomper' && chomperClosed(o.dist, t)) {
             let ahead = o.dist - lap
             if (ahead < 0) ahead += len
             if (ahead < STOP_HOLD_AHEAD) hold = true
           } else if (o.type === 'spinner') {
             // Knock when the hammer sweeps across while the animal is under it.
-            if (lap >= o.start && lap <= o.end && spinnerStruck(o.dist, t, Math.min(delta, 0.1))) {
+            if (inZone && spinnerStruck(o.dist, t, Math.min(delta, 0.1))) {
               knockUntil.current[l] = t + KNOCK_DUR
               knockDir.current[l] = spinnerSwingSign(o.dist, t)
             }
+          } else if (o.type === 'fire') {
+            if (inZone && fireOn(o.dist, t) && t > knockUntil.current[l] + 0.4) {
+              knockUntil.current[l] = t + KNOCK_DUR * 0.8
+              knockDir.current[l] = -1
+            }
+          } else if (o.type === 'pendulum') {
+            if (inZone && pendulumStruck(o.dist, t, Math.min(delta, 0.1))) {
+              knockUntil.current[l] = t + KNOCK_DUR
+              knockDir.current[l] = -1
+            }
+          } else if (o.type === 'fan') {
+            if (inZone && fanOn(o.dist, t)) fanPush = true
+          } else if (o.type === 'geyser') {
+            if (inZone && geyserOn(o.dist, t) && t > hopStart.current[l] + 1.6) {
+              hopStart.current[l] = t
+            }
+          } else if (o.type === 'log') {
+            const logLap = o.end - logU(o.dist, t) * o.len
+            if (inZone && lap < logLap && logLap - lap < 0.9) logPush = true
           }
         }
 
@@ -254,9 +293,32 @@ export default function Riders({
         if (effect.type !== 'mud' && mudStick.current[l] > 0) {
           v *= THREE.MathUtils.lerp(1, MUD_SLOW, mudStick.current[l])
         }
+        if (t < hopStart.current[l] + HOP_DUR) v *= 0.5 // riding a geyser jet
+        if (t < spinStart.current[l] + SPIN_OUT_DUR) v *= 0.12 // banana stumble
         if (hold) v = 0
         else if (t < knockUntil.current[l]) v = KNOCK_SPEED * knockDir.current[l]
+        else if (fanPush) v = -3.2
+        else if (logPush) v = -4
+        const lapBefore = lap
         dist.current[l] += v * dt
+        // One-shot crossings (banana spin-out, portal teleport).
+        let lapAfter = len > 0 ? dist.current[l] % len : dist.current[l]
+        if (lapAfter < 0) lapAfter += len
+        if (v > 0) {
+          for (const o of lane.obstacles) {
+            if (o.type !== 'banana' && o.type !== 'portal') continue
+            const crossed =
+              lapBefore <= lapAfter
+                ? o.dist > lapBefore && o.dist <= lapAfter
+                : o.dist > lapBefore || o.dist <= lapAfter
+            if (!crossed) continue
+            if (o.type === 'banana' && t > spinStart.current[l] + SPIN_OUT_DUR + 0.5) {
+              spinStart.current[l] = t
+            } else if (o.type === 'portal' && o.delta != null) {
+              dist.current[l] += o.delta
+            }
+          }
+        }
 
         if (isTrial) {
           // Stop the animal on the finish line after a single lap.
@@ -287,12 +349,22 @@ export default function Riders({
       if (laneRunning && effect.type !== 'gap' && effect.type !== 'trampoline') {
         g.position.y += Math.abs(Math.sin(dist.current[l] * 1.4)) * 0.06
       }
+      // Geyser hop: a tall slow arc while the jet carries the animal.
+      const hopP = (t - hopStart.current[l]) / HOP_DUR
+      if (hopP >= 0 && hopP < 1) g.position.y += Math.sin(Math.PI * hopP) * HOP_HEIGHT
+      // Ice skid: slide side to side with a little body roll.
+      const onIce = effect.type === 'ice'
+      if (onIce) g.position.addScaledVector(f.right, Math.sin(dist.current[l] * 2.2) * 0.18)
 
       xAxis.crossVectors(f.up, f.tangent).normalize()
       yAxis.crossVectors(f.tangent, xAxis).normalize()
       m.makeBasis(xAxis, yAxis, f.tangent)
       q.setFromRotationMatrix(m)
       g.quaternion.copy(q)
+      if (onIce) g.rotateZ(Math.sin(dist.current[l] * 2.2 + 1) * 0.16)
+      // Banana spin-out: a full pirouette while stumbling.
+      const spinP = (t - spinStart.current[l]) / SPIN_OUT_DUR
+      if (spinP >= 0 && spinP < 1) g.rotateY(spinP * Math.PI * 2)
 
       // Publish current lap distance for obstacle (crate) hit detection.
       let lapNow = len > 0 ? along % len : along
