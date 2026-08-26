@@ -21,6 +21,7 @@ import Scenery from './env/Scenery'
 import { EnvParams, SUMMER, cloneParams } from './env/model'
 import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
+import { Fireworks, Grandstands, StartGate, Trackside } from './track/Stadium'
 import './styles.css'
 
 interface Action {
@@ -704,20 +705,17 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           <Obstacles placements={track.placements} distancesRef={distancesRef} length={track.length} />
 
           {shape.length > 0 && (
-            <group position={gate.pos} quaternion={gate.quaternion}>
-              <mesh position={[-gate.halfW, 1.1, 0]} castShadow>
-                <boxGeometry args={[0.25, 2.2, 0.25]} />
-                <meshStandardMaterial color="#ffffff" />
-              </mesh>
-              <mesh position={[gate.halfW, 1.1, 0]} castShadow>
-                <boxGeometry args={[0.25, 2.2, 0.25]} />
-                <meshStandardMaterial color="#ffffff" />
-              </mesh>
-              <mesh position={[0, 2.3, 0]} castShadow>
-                <boxGeometry args={[gate.halfW * 2, 0.4, 0.25]} />
-                <meshStandardMaterial color="#e53935" />
-              </mesh>
-            </group>
+            <>
+              <StartGate
+                position={gate.pos}
+                quaternion={gate.quaternion}
+                halfW={gate.halfW}
+                countdown={countdown}
+                armed={armed && trialActive}
+              />
+              <Grandstands position={gate.pos} quaternion={gate.quaternion} halfW={gate.halfW} />
+              <Trackside track={track} halfW={gate.halfW} />
+            </>
           )}
 
           {trialDone && podiumEntries.length > 0 && (
@@ -727,6 +725,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               entries={podiumEntries}
             />
           )}
+          <Fireworks center={podiumSpot.pos} back={podiumSpot.tangent} active={trialDone} />
 
           {track.length > 0 && !trialDone && (
             <Riders
