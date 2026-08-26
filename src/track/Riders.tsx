@@ -125,6 +125,8 @@ interface RidersProps {
   paused?: boolean
   /** Per-lane colours for the default (primitive) animal. */
   laneColors?: AnimalColors[]
+  /** Jump-height multiplier from the environment (moon gravity). */
+  jumpScale?: number
   /** Per-lane display names; when `showTags` is true a floating name pill
    * rides above each animal (broadcast overlay). */
   names?: string[]
@@ -164,6 +166,7 @@ export default function Riders({
   laneColors,
   names,
   showTags,
+  jumpScale = 1,
 }: RidersProps) {
   const groupRefs = useRef<(THREE.Group | null)[]>([])
   const dist = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
@@ -353,13 +356,13 @@ export default function Riders({
         .copy(f.pos)
         .addScaledVector(f.right, lane.offset)
         .addScaledVector(f.up, RIDE_OFFSET)
-      g.position.y += jumpOffset(effect.type, effect.u)
+      g.position.y += jumpOffset(effect.type, effect.u) * jumpScale
       if (laneRunning && effect.type !== 'gap' && effect.type !== 'trampoline') {
         g.position.y += Math.abs(Math.sin(dist.current[l] * 1.4)) * 0.06
       }
       // Geyser hop: a tall slow arc while the jet carries the animal.
       const hopP = (t - hopStart.current[l]) / HOP_DUR
-      if (hopP >= 0 && hopP < 1) g.position.y += Math.sin(Math.PI * hopP) * HOP_HEIGHT
+      if (hopP >= 0 && hopP < 1) g.position.y += Math.sin(Math.PI * hopP) * HOP_HEIGHT * jumpScale
       // Ice skid: slide side to side with a little body roll.
       const onIce = effect.type === 'ice'
       if (onIce) g.position.addScaledVector(f.right, Math.sin(dist.current[l] * 2.2) * 0.18)

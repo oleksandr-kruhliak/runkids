@@ -682,8 +682,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         <Canvas shadows camera={{ position: [26, 20, 30], fov: 50 }} dpr={[1, 2]}>
           <color attach="background" args={[env.sky.horizon]} />
           <fog attach="fog" args={[env.sky.horizon, 70, 220]} />
-          <Sky zenith={env.sky.zenith} mid={env.sky.mid} horizon={env.sky.horizon} clouds={env.clouds} />
-          <hemisphereLight args={['#ffffff', '#9db4c0', 0.9]} />
+          <Sky
+            zenith={env.sky.zenith}
+            mid={env.sky.mid}
+            horizon={env.sky.horizon}
+            clouds={env.clouds}
+            night={env.night}
+          />
+          <hemisphereLight args={env.night ? ['#4a5a8a', '#1c2438', 0.5] : ['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
             position={[24, 34, 14]}
             intensity={env.sun}
@@ -746,6 +752,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               paused={paused}
               names={racers.map((r) => r.name)}
               showTags={playing && !introOpen}
+              jumpScale={env.jump ?? 1}
             />
           )}
 

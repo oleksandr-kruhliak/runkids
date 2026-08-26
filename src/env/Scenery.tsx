@@ -9,17 +9,32 @@ import {
   newBag,
   vAcacia,
   vBuilding,
+  vBuildingNight,
+  vBurntTree,
   vBush,
+  vCandyCane,
+  vCrater,
+  vDome,
   vDrift,
   vFloe,
   vFlowers,
+  vGumdrop,
   vLamp,
+  vLavaPool,
+  vLollipop,
+  vMoonFlag,
   vMountain,
+  vPalm,
   vPine,
   vPlateau,
+  vRocket,
   vRocks,
+  vSandcastle,
+  vShells,
   vTallTree,
   vTree,
+  vUmbrella,
+  vVolcano,
 } from './voxels'
 
 // Environment scenery. The 'classic' set uses low-poly primitives; the world
@@ -282,33 +297,53 @@ function Balloon({ s, seed }: { s: number; seed: number }) {
 
 let bagCounter = 0
 
-/** Draws a whole VoxelBag as one instanced cube mesh (one draw call). */
+/** Draws a whole VoxelBag: one lit instanced mesh + one unlit glow mesh. */
 function VoxelField({ bag }: { bag: VoxelBag }) {
   const count = bag.pos.length / 3
+  const glowCount = bag.gpos.length / 3
   const matrix = useMemo(() => new THREE.Matrix4(), [])
   const color = useMemo(() => new THREE.Color(), [])
-  if (count === 0) return null
+  const fill = (
+    inst: THREE.InstancedMesh | null,
+    pos: number[],
+    col: number[],
+    n: number,
+  ) => {
+    if (!inst) return
+    for (let i = 0; i < n; i++) {
+      matrix.setPosition(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2])
+      inst.setMatrixAt(i, matrix)
+      color.setRGB(col[i * 3], col[i * 3 + 1], col[i * 3 + 2])
+      inst.setColorAt(i, color)
+    }
+    inst.instanceMatrix.needsUpdate = true
+    if (inst.instanceColor) inst.instanceColor.needsUpdate = true
+  }
   return (
-    <instancedMesh
-      key={bag.key}
-      args={[undefined, undefined, count]}
-      castShadow
-      receiveShadow
-      ref={(inst) => {
-        if (!inst) return
-        for (let i = 0; i < count; i++) {
-          matrix.setPosition(bag.pos[i * 3], bag.pos[i * 3 + 1], bag.pos[i * 3 + 2])
-          inst.setMatrixAt(i, matrix)
-          color.setRGB(bag.col[i * 3], bag.col[i * 3 + 1], bag.col[i * 3 + 2])
-          inst.setColorAt(i, color)
-        }
-        inst.instanceMatrix.needsUpdate = true
-        if (inst.instanceColor) inst.instanceColor.needsUpdate = true
-      }}
-    >
-      <boxGeometry args={[VOX, VOX, VOX]} />
-      <meshStandardMaterial roughness={0.85} />
-    </instancedMesh>
+    <group>
+      {count > 0 && (
+        <instancedMesh
+          key={bag.key}
+          args={[undefined, undefined, count]}
+          castShadow
+          receiveShadow
+          ref={(inst) => fill(inst, bag.pos, bag.col, count)}
+        >
+          <boxGeometry args={[VOX, VOX, VOX]} />
+          <meshStandardMaterial roughness={0.85} />
+        </instancedMesh>
+      )}
+      {glowCount > 0 && (
+        <instancedMesh
+          key={bag.key + 1000000}
+          args={[undefined, undefined, glowCount]}
+          ref={(inst) => fill(inst, bag.gpos, bag.gcol, glowCount)}
+        >
+          <boxGeometry args={[VOX, VOX, VOX]} />
+          <meshBasicMaterial fog={false} />
+        </instancedMesh>
+      )}
+    </group>
   )
 }
 
@@ -476,6 +511,46 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           else if (t < 0.9) vFlowers(bag, sp.x, sp.z, sp.seed)
           else vBush(bag, sp.x, sp.z, sp.seed, tree)
           break
+        case 'volcano':
+          if (t < 0.2 && room > 6) vVolcano(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.45) vBurntTree(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.65 && room > 2.5) vLavaPool(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.85) vRocks(bag, sp.x, sp.z, sp.seed)
+          else vBurntTree(bag, sp.x, sp.z, sp.seed)
+          break
+        case 'candy':
+          if (t < 0.32) vLollipop(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.5) vCandyCane(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.72) vGumdrop(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.82 && room > 12) {
+            vPlateau(bag, sp.x, sp.z, sp.seed, '#f078c2', true, awayX, awayZ,
+                     { fall: '#8a5a34', foam: '#e8c89a', river: '#6d4326' }) // chocolate falls
+          } else if (t < 0.82) vGumdrop(bag, sp.x, sp.z, sp.seed)
+          else vFlowers(bag, sp.x, sp.z, sp.seed)
+          break
+        case 'nightcity':
+          if (t < 0.55 && room > 2.5) vBuildingNight(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.55) vLamp(bag, sp.x, sp.z, sp.seed, true)
+          else if (t < 0.72) vLamp(bag, sp.x, sp.z, sp.seed, true)
+          else if (t < 0.88) vTree(bag, sp.x, sp.z, sp.seed, tree)
+          else vBush(bag, sp.x, sp.z, sp.seed, tree)
+          break
+        case 'beach':
+          if (t < 0.3) vPalm(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.46) vUmbrella(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.6 && room > 3) vSandcastle(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.78) vFloe(bag, sp.x, sp.z, sp.seed) // lagoon pool
+          else vShells(bag, sp.x, sp.z, sp.seed)
+          break
+        case 'moon':
+          if (t < 0.34 && room > 3) vCrater(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.34) vRocks(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.56) vRocks(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.64 && room > 3) vRocket(bag, sp.x, sp.z, sp.seed)
+          else if (t < 0.78) vMoonFlag(bag, sp.x, sp.z, sp.seed)
+          else if (room > 3.5) vDome(bag, sp.x, sp.z, sp.seed)
+          else vRocks(bag, sp.x, sp.z, sp.seed)
+          break
       }
     }
 
@@ -502,6 +577,22 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           break
         case 'city':
           vBuilding(bag, x, z, seed, true)
+          break
+        case 'volcano':
+          vVolcano(bag, x, z, seed, true)
+          break
+        case 'candy':
+          vLollipop(bag, x, z, seed)
+          break
+        case 'nightcity':
+          vBuildingNight(bag, x, z, seed, true)
+          break
+        case 'beach':
+          vPalm(bag, x, z, seed)
+          break
+        case 'moon':
+          if (rnd(seed) > 0.5) vDome(bag, x, z, seed)
+          else vCrater(bag, x, z, seed, true)
           break
       }
     }

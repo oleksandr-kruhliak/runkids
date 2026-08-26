@@ -2,11 +2,21 @@
 // (sky gradient, ground/grass colours, light, clouds, falling particles)
 // that skins the race world — winter, autumn, spring, summer, or anything.
 
-export type ParticleKind = 'none' | 'snow' | 'leaves' | 'petals' | 'rain'
+export type ParticleKind = 'none' | 'snow' | 'leaves' | 'petals' | 'rain' | 'embers' | 'sprinkles'
 export type SceneryExtra = 'none' | 'snowman' | 'pumpkin' | 'flowers'
 /** Which asset family fills the field: the classic low-poly props, or one of
  * the voxel world sets (cube trees, block mountains, city buildings...). */
-export type ScenerySet = 'classic' | 'forest' | 'savanna' | 'snowy' | 'city'
+export type ScenerySet =
+  | 'classic'
+  | 'forest'
+  | 'savanna'
+  | 'snowy'
+  | 'city'
+  | 'volcano'
+  | 'candy'
+  | 'nightcity'
+  | 'beach'
+  | 'moon'
 
 export interface EnvParams {
   sky: { zenith: string; mid: string; horizon: string }
@@ -19,6 +29,10 @@ export interface EnvParams {
   particles: ParticleKind
   /** 0–100, how dense the falling particles are. */
   particleDensity: number
+  /** Night mode: starfield + moon instead of the sun, dim light. */
+  night?: boolean
+  /** Jump-height multiplier (moon gravity!). Default 1. */
+  jump?: number
   /** Primitive-built props scattered around the field. */
   scenery: {
     /** 0–100 amount of trees/rocks/bushes. */
@@ -38,6 +52,11 @@ export const SET_META: Record<ScenerySet, { icon: string; label: string }> = {
   savanna: { icon: '🦒', label: 'Savanna' },
   snowy: { icon: '🏔', label: 'Snowy Peaks' },
   city: { icon: '🏙', label: 'Block City' },
+  volcano: { icon: '🌋', label: 'Volcano' },
+  candy: { icon: '🍭', label: 'Candy' },
+  nightcity: { icon: '🌃', label: 'Night City' },
+  beach: { icon: '🏖', label: 'Beach' },
+  moon: { icon: '🌙', label: 'Moon' },
 }
 
 export const EXTRA_META: Record<SceneryExtra, { icon: string; label: string }> = {
@@ -60,6 +79,8 @@ export const PARTICLE_META: Record<ParticleKind, { icon: string; label: string }
   leaves: { icon: '🍂', label: 'Leaves' },
   petals: { icon: '🌸', label: 'Petals' },
   rain: { icon: '🌧', label: 'Rain' },
+  embers: { icon: '🔥', label: 'Embers' },
+  sprinkles: { icon: '🍬', label: 'Sprinkles' },
 }
 
 export const SUMMER: EnvParams = {
@@ -187,8 +208,89 @@ export const WORLDS: { key: string; icon: string; label: string; params: EnvPara
   },
 ]
 
+export const WORLDS2: { key: string; icon: string; label: string; params: EnvParams }[] = [
+  {
+    key: 'volcano',
+    icon: '🌋',
+    label: 'Volcano',
+    params: {
+      sky: { zenith: '#2a1216', mid: '#8a2e1e', horizon: '#f2823c' },
+      clouds: 5,
+      sun: 0.95,
+      ground: '#4a3a3c',
+      grass: '#5a4448',
+      particles: 'embers',
+      particleDensity: 45,
+      scenery: { density: 55, tree: '#3d2f2f', extra: 'none', set: 'volcano' },
+    },
+  },
+  {
+    key: 'candy',
+    icon: '🍭',
+    label: 'Candy Land',
+    params: {
+      sky: { zenith: '#f49ac8', mid: '#fbc8e0', horizon: '#fff0f6' },
+      clouds: 12,
+      sun: 1.6,
+      ground: '#9fe8c8',
+      grass: '#f078c2',
+      particles: 'sprinkles',
+      particleDensity: 40,
+      scenery: { density: 60, tree: '#ff5e8a', extra: 'none', set: 'candy' },
+    },
+  },
+  {
+    key: 'nightcity',
+    icon: '🌃',
+    label: 'Night City',
+    params: {
+      sky: { zenith: '#070b1c', mid: '#141d42', horizon: '#2a3566' },
+      clouds: 4,
+      sun: 0.55,
+      ground: '#3a4250',
+      grass: '#2f3a46',
+      particles: 'none',
+      particleDensity: 0,
+      night: true,
+      scenery: { density: 55, tree: '#1f4a38', extra: 'none', set: 'nightcity' },
+    },
+  },
+  {
+    key: 'beach',
+    icon: '🏖',
+    label: 'Beach Day',
+    params: {
+      sky: { zenith: '#1e90f0', mid: '#7cc4f8', horizon: '#e0f6ff' },
+      clouds: 8,
+      sun: 1.75,
+      ground: '#f2dca2',
+      grass: '#e8cf9a',
+      particles: 'none',
+      particleDensity: 0,
+      scenery: { density: 55, tree: '#4cae3d', extra: 'none', set: 'beach' },
+    },
+  },
+  {
+    key: 'moon',
+    icon: '🌙',
+    label: 'Moon Base',
+    params: {
+      sky: { zenith: '#04060f', mid: '#0a0f24', horizon: '#1a2138' },
+      clouds: 0,
+      sun: 0.85,
+      ground: '#8a8f9a',
+      grass: '#7d828e',
+      particles: 'none',
+      particleDensity: 0,
+      night: true,
+      jump: 1.8,
+      scenery: { density: 50, tree: '#8a8f9a', extra: 'none', set: 'moon' },
+    },
+  },
+]
+
 /** Every pickable preset: seasons plus voxel worlds. */
-export const ALL_PRESETS = [...PRESETS, ...WORLDS]
+export const ALL_PRESETS = [...PRESETS, ...WORLDS, ...WORLDS2]
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
@@ -202,9 +304,9 @@ export function newEnvDesign(params: EnvParams = SUMMER, name = 'My Environment'
   return { id: uid(), name, updated: Date.now(), params: cloneParams(params) }
 }
 
-const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain']
+const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain', 'embers', 'sprinkles']
 const EXTRAS: SceneryExtra[] = ['none', 'snowman', 'pumpkin', 'flowers']
-const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city']
+const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city', 'volcano', 'candy', 'nightcity', 'beach', 'moon']
 const color = (v: unknown, fb: string) =>
   typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : fb
 const num = (v: unknown, fb: number, lo: number, hi: number) =>
@@ -227,6 +329,8 @@ export function coerceEnv(v: any): EnvDesign | null {
     grass: color(p.grass, SUMMER.grass),
     particles: KINDS.includes(p.particles) ? p.particles : 'none',
     particleDensity: Math.round(num(p.particleDensity, 0, 0, 100)),
+    night: p.night === true,
+    jump: num(p.jump, 1, 0.5, 2.5),
     scenery: {
       density: Math.round(num(p.scenery?.density, SUMMER.scenery.density, 0, 100)),
       tree: color(p.scenery?.tree, SUMMER.scenery.tree),

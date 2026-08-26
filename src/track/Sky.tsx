@@ -88,8 +88,8 @@ function Sun() {
   )
 }
 
-/** One voxel cloud: a flat-bottomed cluster of white boxes. */
-function Cloud({ seed }: { seed: number }) {
+/** One voxel cloud: a flat-bottomed cluster of boxes. */
+function Cloud({ seed, color = '#ffffff' }: { seed: number; color?: string }) {
   const blocks = useMemo(() => {
     const rnd = (i: number) => {
       // tiny deterministic hash so each cloud keeps its shape across renders
@@ -121,7 +121,7 @@ function Cloud({ seed }: { seed: number }) {
       {blocks.map((b, i) => (
         <mesh key={i} position={[b.x, b.y, b.z]}>
           <boxGeometry args={[b.w, b.h, b.w * 0.8]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.94} fog={false} />
+          <meshBasicMaterial color={color} transparent opacity={0.94} fog={false} />
         </mesh>
       ))}
     </group>
@@ -135,6 +135,61 @@ interface SkyProps {
   mid?: string
   horizon?: string
   clouds?: number
+  /** Starfield + moon instead of the sun; clouds turn to dark silhouettes. */
+  night?: boolean
+}
+
+/** A scattering of star cubes on the upper dome, plus a pale voxel moon. */
+function NightLights() {
+  const stars = useMemo(() => {
+    const rnd = (i: number) => {
+      const x = Math.sin(i * 127.1 + 311.7) * 43758.5453
+      return x - Math.floor(x)
+    }
+    return Array.from({ length: 220 }, (_, i) => {
+      const a = rnd(i * 2 + 1) * Math.PI * 2
+      const elev = 0.08 + rnd(i * 2 + 2) * 1.35 // radians above horizon
+      const r = 470
+      return {
+        pos: [Math.cos(a) * Math.cos(elev) * r, Math.sin(elev) * r, Math.sin(a) * Math.cos(elev) * r] as [
+          number,
+          number,
+          number,
+        ],
+        s: 0.9 + rnd(i * 3 + 5) * 1.6,
+        c: rnd(i * 5 + 7) > 0.85 ? '#bcd8ff' : rnd(i * 7 + 9) > 0.85 ? '#ffe9c8' : '#ffffff',
+      }
+    })
+  }, [])
+  return (
+    <group>
+      {stars.map((st, i) => (
+        <mesh key={i} position={st.pos}>
+          <boxGeometry args={[st.s, st.s, st.s]} />
+          <meshBasicMaterial color={st.c} fog={false} />
+        </mesh>
+      ))}
+      {/* pale voxel moon with a soft halo */}
+      <group position={[-200, 300, -220]}>
+        <mesh>
+          <boxGeometry args={[42, 42, 8]} />
+          <meshBasicMaterial color="#e8ecf4" fog={false} />
+        </mesh>
+        <mesh position={[8, 6, 1]}>
+          <boxGeometry args={[10, 10, 8]} />
+          <meshBasicMaterial color="#c8ced9" fog={false} />
+        </mesh>
+        <mesh position={[-9, -8, 1]}>
+          <boxGeometry args={[7, 7, 8]} />
+          <meshBasicMaterial color="#c8ced9" fog={false} />
+        </mesh>
+        <mesh position={[0, 0, -2]}>
+          <boxGeometry args={[56, 56, 4]} />
+          <meshBasicMaterial color="#aebadd" transparent opacity={0.28} fog={false} />
+        </mesh>
+      </group>
+    </group>
+  )
 }
 
 export default function Sky({
@@ -142,6 +197,7 @@ export default function Sky({
   mid = '#a8d8fb',
   horizon = SKY_HORIZON,
   clouds: cloudCount = CLOUD_COUNT,
+  night = false,
 }: SkyProps) {
   const cloudsRef = useRef<THREE.Group>(null)
   const clouds = useMemo(
@@ -170,11 +226,11 @@ export default function Sky({
   return (
     <group>
       <Dome zenith={zenith} mid={mid} horizon={horizon} />
-      <Sun />
+      {night ? <NightLights /> : <Sun />}
       <group ref={cloudsRef}>
         {clouds.map((c) => (
           <group key={c.seed} position={c.pos} rotation={[0, c.rotY, 0]}>
-            <Cloud seed={c.seed} />
+            <Cloud seed={c.seed} color={night ? '#2a3350' : '#ffffff'} />
           </group>
         ))}
       </group>

@@ -21,6 +21,7 @@ import {
   SceneryExtra,
   ScenerySet,
   WORLDS,
+  WORLDS2,
   cloneParams,
   newEnvDesign,
 } from './model'
@@ -37,7 +38,7 @@ const PREVIEW_LANES: PieceType[][] = [[], [], []]
 
 const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain']
 const EXTRAS: SceneryExtra[] = ['none', 'snowman', 'pumpkin', 'flowers']
-const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city']
+const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city', 'volcano', 'candy', 'nightcity', 'beach', 'moon']
 
 /** Multiply a hex colour towards dark (for grid lines derived from ground). */
 export function shade(hex: string, k: number): string {
@@ -182,8 +183,8 @@ export default function EnvStudio({
         <Canvas shadows camera={{ position: [22, 14, 26], fov: 50 }} dpr={[1, 2]}>
           <color attach="background" args={[p.sky.horizon]} />
           <fog attach="fog" args={[p.sky.horizon, 70, 220]} />
-          <Sky zenith={p.sky.zenith} mid={p.sky.mid} horizon={p.sky.horizon} clouds={p.clouds} />
-          <hemisphereLight args={['#ffffff', '#9db4c0', 0.9]} />
+          <Sky zenith={p.sky.zenith} mid={p.sky.mid} horizon={p.sky.horizon} clouds={p.clouds} night={p.night} />
+          <hemisphereLight args={p.night ? ['#4a5a8a', '#1c2438', 0.5] : ['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
             position={[24, 34, 14]}
             intensity={p.sun}
@@ -249,7 +250,7 @@ export default function EnvStudio({
             <span className="group-title">Generate a world</span>
           </div>
           <div className="env-presets">
-            {WORLDS.map((pr) => (
+            {[...WORLDS, ...WORLDS2].map((pr) => (
               <button key={pr.key} className="env-preset world" onClick={() => applyPreset(pr.key)}>
                 <span>{pr.icon}</span>
                 {pr.label}
@@ -276,6 +277,14 @@ export default function EnvStudio({
           <ColorRow label="Sky top" value={p.sky.zenith} onChange={(v) => patchSky({ zenith: v })} />
           <ColorRow label="Sky middle" value={p.sky.mid} onChange={(v) => patchSky({ mid: v })} />
           <ColorRow label="Horizon" value={p.sky.horizon} onChange={(v) => patchSky({ horizon: v })} />
+          <div className="env-presets" style={{ marginBottom: 6 }}>
+            <button className={`env-preset ${!p.night ? 'on' : ''}`} onClick={() => patch({ night: false })}>
+              <span>☀️</span>Day
+            </button>
+            <button className={`env-preset ${p.night ? 'on' : ''}`} onClick={() => patch({ night: true })}>
+              <span>🌙</span>Night
+            </button>
+          </div>
           <SliderRow
             label="Sunlight"
             min={0.4}
@@ -284,6 +293,15 @@ export default function EnvStudio({
             value={p.sun}
             format={(v) => v.toFixed(2)}
             onChange={(v) => patch({ sun: v })}
+          />
+          <SliderRow
+            label="Jump power"
+            min={0.8}
+            max={2.2}
+            step={0.1}
+            value={p.jump ?? 1}
+            format={(v) => `${v.toFixed(1)}x`}
+            onChange={(v) => patch({ jump: v })}
           />
           <SliderRow
             label="Clouds"

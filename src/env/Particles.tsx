@@ -64,6 +64,25 @@ const SPECS: Record<Exclude<ParticleKind, 'none'>, Spec> = {
     opacity: 0.45,
     max: 700,
   },
+  embers: {
+    // negative fall speed = they rise, drifting up from the ground
+    geometry: () => new THREE.BoxGeometry(0.1, 0.1, 0.1),
+    colors: ['#ff8a2e', '#ffb52e', '#ff5e2e', '#ffd21a'],
+    fall: [-1.8, -0.8],
+    sway: 1.2,
+    tumble: 1.5,
+    opacity: 0.95,
+    max: 450,
+  },
+  sprinkles: {
+    geometry: () => new THREE.BoxGeometry(0.06, 0.06, 0.2),
+    colors: ['#ff5e8a', '#4aa3f0', '#59c94f', '#f2b53c', '#b07ce8', '#ffffff'],
+    fall: [2.2, 3.6],
+    sway: 1.6,
+    tumble: 2.6,
+    opacity: 1,
+    max: 500,
+  },
 }
 
 const rnd = (n: number) => {
@@ -105,8 +124,9 @@ export default function Particles({ kind, density, center, radius }: Props) {
     const { spec, parts } = data
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i]
-      // Wrap by time so pausing/resuming stays consistent.
-      let y = p.y - ((t * p.fall) % HEIGHT)
+      // Wrap by time so pausing/resuming stays consistent (negative fall
+      // speeds rise instead — embers).
+      let y = (p.y - t * p.fall) % HEIGHT
       if (y < 0) y += HEIGHT
       const sx = spec.sway ? Math.sin(t * 0.8 + p.phase) * spec.sway : 0
       const sz = spec.sway ? Math.cos(t * 0.6 + p.phase * 1.3) * spec.sway * 0.7 : 0
