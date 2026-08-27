@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
-import { ALL_PRESETS, EnvParams, cloneParams } from './env/model'
+import { ALL_PRESETS, EnvParams, PARTICLE_META, ParticleKind, cloneParams } from './env/model'
 import { loadEnvLibrary } from './env/library'
 import './setup.css'
 
@@ -71,6 +71,8 @@ export default function PlaySetup({
   // Environment: built-in seasons plus anything saved in the Env Studio.
   const savedEnvs = useMemo(() => loadEnvLibrary(), [])
   const [envKey, setEnvKey] = useState('preset:summer')
+  // Weather: 'auto' keeps the world's own sky, 'random' rolls one at generate.
+  const [weather, setWeather] = useState<'auto' | 'random' | ParticleKind>('auto')
 
   const toggle = (key: string) =>
     setSelected((sel) => {
@@ -91,6 +93,15 @@ export default function PlaySetup({
     const preset = ALL_PRESETS.find((pr) => `preset:${pr.key}` === envKey)
     const saved = savedEnvs.find((d) => d.id === envKey)
     const env = cloneParams(saved?.params ?? preset?.params ?? ALL_PRESETS[0].params)
+    // Apply the weather choice over the world's default.
+    if (weather === 'random') {
+      const options: ParticleKind[] = ['none', 'snow', 'rain', 'storm', 'leaves', 'petals', 'sprinkles']
+      env.particles = options[Math.floor(Math.random() * options.length)]
+      env.particleDensity = env.particles === 'none' ? 0 : 40 + Math.floor(Math.random() * 35)
+    } else if (weather !== 'auto') {
+      env.particles = weather
+      env.particleDensity = weather === 'none' ? 0 : env.particleDensity > 0 ? env.particleDensity : 55
+    }
     onGenerate({ picks, avgTime, obstaclePct, raceMode, env })
   }
 
@@ -153,6 +164,40 @@ export default function PlaySetup({
               <span className="mode-name">Time Trial</span>
               <span className="mode-desc">One racer at a time</span>
             </button>
+          </div>
+        </section>
+
+        <section className="setup-section">
+          <div className="setup-label-row">
+            <span className="setup-label">Falling from the sky</span>
+          </div>
+          <div className="env-row">
+            <button
+              className={`env-chip ${weather === 'auto' ? 'on' : ''}`}
+              onClick={() => setWeather('auto')}
+              title="Whatever the chosen world brings"
+            >
+              <span>🌈</span>
+              Auto
+            </button>
+            <button
+              className={`env-chip ${weather === 'random' ? 'on' : ''}`}
+              onClick={() => setWeather('random')}
+              title="Roll a surprise on every generate"
+            >
+              <span>🎲</span>
+              Random
+            </button>
+            {(['none', 'snow', 'rain', 'storm', 'leaves', 'petals', 'embers', 'sprinkles'] as ParticleKind[]).map((k) => (
+              <button
+                key={k}
+                className={`env-chip ${weather === k ? 'on' : ''}`}
+                onClick={() => setWeather(k)}
+              >
+                <span>{PARTICLE_META[k].icon}</span>
+                {PARTICLE_META[k].label}
+              </button>
+            ))}
           </div>
         </section>
 
