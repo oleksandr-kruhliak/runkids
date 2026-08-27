@@ -2,6 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Track, sampleCenter } from './build'
+import { sfx } from '../audio'
 
 // The stadium package: a checkered voxel start gate with countdown lights and
 // a banner, grandstands full of cheering cube animals, trackside flags and
@@ -421,6 +422,8 @@ export function Fireworks({
 }) {
   const ref = useRef<THREE.InstancedMesh>(null)
   const dummy = useMemo(() => new THREE.Object3D(), [])
+  // Track each rocket's phase so a pop fires exactly when it bursts.
+  const wasRising = useRef<boolean[]>([])
 
   const rockets = useMemo(
     () =>
@@ -447,10 +450,13 @@ export function Fireworks({
     const col = new THREE.Color()
     const bx = center.x - back.x * 9
     const bz = center.z - back.z * 9
-    rockets.forEach((r) => {
+    rockets.forEach((r, ri) => {
       let p = (t + r.phase) % CYCLE
       if (p < 0) p += CYCLE
       const u = p / CYCLE
+      const rising = u < RISE
+      if (wasRising.current[ri] && !rising) sfx('pop', 0.8)
+      wasRising.current[ri] = rising
       r.dirs.forEach((dir, k) => {
         if (u < RISE) {
           // ascending: a short bright streak

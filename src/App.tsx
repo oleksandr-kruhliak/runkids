@@ -21,6 +21,7 @@ import Scenery from './env/Scenery'
 import { Birds, Lightning } from './env/Weather'
 import { EnvParams, SUMMER, cloneParams } from './env/model'
 import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
+import { initAudio, setAudioEnabled, setCrowd, sfx } from './audio'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
 import { Fireworks, Grandstands, StartGate, Trackside } from './track/Stadium'
 import './styles.css'
@@ -290,6 +291,16 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const [introOpen, setIntroOpen] = useState(false)
   // Auto-director: broadcast-style camera cuts during quick-play races.
   const [director, setDirector] = useState(true)
+  // Procedural sound effects (M to mute; the tab recorder captures them).
+  const [soundOn, setSoundOn] = useState(true)
+  const toggleSound = () => {
+    setSoundOn((on) => {
+      setAudioEnabled(!on)
+      return !on
+    })
+  }
+  const toggleSoundRef = useRef(toggleSound)
+  toggleSoundRef.current = toggleSound
   // Active environment (season) skinning the whole race scene.
   const [env, setEnv] = useState<EnvParams>(() => cloneParams(SUMMER))
   // Recording mode: hide every control except the broadcast overlay (H key).
@@ -348,14 +359,23 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setArmed(false)
     let n = 3
     setCountdown(3)
+    sfx('beep')
+    setCrowd(0.35)
     const tick = () => {
       n -= 1
       if (n >= 0) {
         setCountdown(n) // 2, 1, then 0 = "GO!"
+        if (n === 0) {
+          sfx('go')
+          setCrowd(0.95, 0.15) // the stands erupt
+        } else {
+          sfx(n === 1 ? 'beepHi' : 'beep')
+        }
         cdTimer.current = setTimeout(tick, 700)
       } else {
         setCountdown(null)
         onGo() // GO — racing starts and the clock runs
+        setCrowd(0.4, 1.4) // settle to a racing murmur
       }
     }
     cdTimer.current = setTimeout(tick, 700)
@@ -408,6 +428,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
   // Called from Riders when an animal crosses the finish.
   const onTrialFinish = (lane: number, time: number) => {
+    sfx('finish')
+    setCrowd(0.9, 0.15)
+    setTimeout(() => setCrowd(0.45, 1.2), 900)
     setTrialTimes((prev) => {
       const n = [...prev]
       n[lane] = time
@@ -428,6 +451,19 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       }
     }, 1100)
   }
+
+  // Victory fanfare when the podium appears.
+  useEffect(() => {
+    if (trialActive && trialDone) {
+      sfx('fanfare')
+      setCrowd(0.85, 0.25)
+    }
+  }, [trialActive, trialDone])
+
+  // Fade the stadium murmur out whenever we leave a race.
+  useEffect(() => {
+    if (mode !== 'play' && !trialActive) setCrowd(0, 0.8)
+  }, [mode, trialActive])
 
   // Grand prix: once every racer has crossed the line, show the podium.
   useEffect(() => {
@@ -451,6 +487,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     const targetLen = Math.max(20, config.avgTime * BASE_SPEED)
     const shape = generateShape(targetLen)
     const laneObstacles = generateLaneObstacles(config.picks.length, targetLen, config.obstaclePct)
+    initAudio() // this runs from a click, so the browser lets audio start
+    setCrowd(0.2)
     setPicks(config.picks)
     setGenerated({ shape, laneObstacles })
     setMode('play')
@@ -466,6 +504,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const backToSetup = () => {
     setIntroOpen(false)
     setClean(false)
+    setCrowd(0, 0.5)
     exitTrial()
     setGenerated(null)
     setMode('setup')
@@ -496,6 +535,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         showToast(next ? 'Recording mode — press H to show controls' : 'Controls shown — press H to hide')
       } else if (e.key === 'r' || e.key === 'R') {
         toggleRecordingRef.current()
+      } else if (e.key === 'm' || e.key === 'M') {
+        toggleSoundRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -916,6 +957,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               <button
                 className="intro-go"
                 onClick={() => {
+                  initAudio()
                   setIntroOpen(false)
                   startTrial()
                 }}
@@ -998,6 +1040,13 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               title="Cinematic camera cuts"
             >
               🎬 Auto cam
+            </button>
+            <button
+              className={`corner-chip ${soundOn ? 'on' : ''}`}
+              onClick={toggleSound}
+              title="Sound effects (M)"
+            >
+              {soundOn ? '🔊 Sound' : '🔇 Muted'}
             </button>
             <button className="corner-chip" onClick={togglePauseMenu}>⏸ Menu (Esc)</button>
           </div>

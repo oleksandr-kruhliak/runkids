@@ -18,14 +18,18 @@ export function isRecordingSupported(): boolean {
 export async function startTabRecording(onDone: (blob: Blob) => void): Promise<() => void> {
   const stream: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({
     video: { frameRate: 60 },
-    audio: false,
+    // Capture the tab's own audio so the game's sound effects land in the file.
+    audio: true,
     // Chrome: preselect this tab in the picker.
     preferCurrentTab: true,
   })
   const mime =
-    ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) =>
-      MediaRecorder.isTypeSupported(m),
-    ) ?? ''
+    [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9',
+      'video/webm',
+    ].find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
   const rec = new MediaRecorder(
     stream,
     mime ? { mimeType: mime, videoBitsPerSecond: 12_000_000 } : undefined,

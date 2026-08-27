@@ -22,6 +22,8 @@ import Animal, { ANIMAL_PALETTES, AnimalColors } from './Animal'
 import Animal3D from './Animal3D'
 import RaceAnimal from './RaceAnimal'
 import { AnimalDesign } from '../studio/model'
+import { SfxName, focusGain, setSfxFocus, sfx } from '../audio'
+import { PieceType } from './pieces'
 
 /** Rounded-pill name tag rendered to a canvas texture, shown as a sprite. */
 function makeTagTexture(name: string, color: string) {
@@ -133,6 +135,19 @@ interface RidersProps {
   showTags?: boolean
 }
 
+/** Sound played when a racer enters each obstacle zone. */
+const ZONE_SFX: Partial<Record<PieceType, SfxName>> = {
+  water: 'splash',
+  mud: 'mud',
+  web: 'mud',
+  boost: 'boost',
+  gap: 'jump',
+  trampoline: 'boing',
+  ring: 'chime',
+  ice: 'skid',
+  magnet: 'rumble',
+}
+
 const MAX_LANES = 8 // upper bound on racers; ref arrays are sized to this
 // sampleCenter()/laneEffect() wrap at exactly `length`, which would snap a
 // finished animal back to the start line, so park it a hair short of the end.
@@ -175,6 +190,12 @@ export default function Riders({
   const knockDir = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
   // Per-lane mud stickiness (1 while in mud, decays after leaving).
   const mudStick = useRef<number[]>(Array.from({ length: MAX_LANES }, () => 0))
+  // Sound: previous zone/hold state per lane, so effects fire on entry only,
+  // and which lane the camera follows (its sounds play at full volume).
+  const prevEffect = useRef<PieceType[]>(Array.from({ length: MAX_LANES }, () => 'straight'))
+  const prevHold = useRef<boolean[]>(Array.from({ length: MAX_LANES }, () => false))
+  const sfxGain = focusGain
+
   // Geyser hop (launch window), banana spin-out, and one-shot event guards.
   const hopStart = useRef<number[]>(Array.from({ length: MAX_LANES }, () => -99))
   const spinStart = useRef<number[]>(Array.from({ length: MAX_LANES }, () => -99))
@@ -200,6 +221,8 @@ export default function Riders({
       hopStart.current[l] = -99
       spinStart.current[l] = -99
       portalUntil.current[l] = 0
+      prevEffect.current[l] = 'straight'
+      prevHold.current[l] = false
       speedRef.current[l] = 0
       distancesRef.current[l] = 0
       finished.current[l] = false
@@ -268,22 +291,26 @@ export default function Riders({
             if (inZone && spinnerStruck(o.dist, t, Math.min(delta, 0.1))) {
               knockUntil.current[l] = t + KNOCK_DUR
               knockDir.current[l] = spinnerSwingSign(o.dist, t)
+              sfx('thud', sfxGain(l))
             }
           } else if (o.type === 'fire') {
             if (inZone && fireOn(o.dist, t) && t > knockUntil.current[l] + 0.4) {
               knockUntil.current[l] = t + KNOCK_DUR * 0.8
               knockDir.current[l] = -1
+              sfx('fire', sfxGain(l))
             }
           } else if (o.type === 'pendulum') {
             if (inZone && pendulumStruck(o.dist, t, Math.min(delta, 0.1))) {
               knockUntil.current[l] = t + KNOCK_DUR
               knockDir.current[l] = -1
+              sfx('thud', sfxGain(l))
             }
           } else if (o.type === 'fan') {
             if (inZone && fanOn(o.dist, t)) fanPush = true
           } else if (o.type === 'geyser') {
             if (inZone && geyserOn(o.dist, t) && t > hopStart.current[l] + 1.6) {
               hopStart.current[l] = t
+              sfx('gush', sfxGain(l))
             }
           } else if (o.type === 'log') {
             const u = logU(o.dist, t)
@@ -292,6 +319,13 @@ export default function Riders({
               if (inZone && lap < logLap && logLap - lap < 0.9) logPush = true
             }
           }
+        }
+
+        // Entering a new zone: play its signature sound once.
+        if (effect.type !== prevEffect.current[l]) {
+          const enter = ZONE_SFX[effect.type]
+          if (enter) sfx(enter, sfxGain(l))
+          prevEffect.current[l] = effect.type
         }
 
         // Mud sticks to the legs: full while in it, then decays, and keeps
@@ -307,8 +341,16 @@ export default function Riders({
         if (t < spinStart.current[l] + SPIN_OUT_DUR) v *= 0.12 // banana stumble
         if (hold) v = 0
         else if (t < knockUntil.current[l]) v = KNOCK_SPEED * knockDir.current[l]
-        else if (fanPush) v = -3.2
-        else if (logPush) v = -4
+        else if (fanPush) {
+          v = -3.2
+          sfx('wind', sfxGain(l))
+        } else if (logPush) {
+          v = -4
+          sfx('rumble', sfxGain(l))
+        }
+        // Blocked by a raised stopper / closed chomper: clank once on arrival.
+        if (hold && !prevHold.current[l]) sfx('clank', sfxGain(l))
+        prevHold.current[l] = hold
         const lapBefore = lap
         dist.current[l] += v * dt
         // One-shot crossings (banana spin-out, portal teleport).
@@ -324,9 +366,11 @@ export default function Riders({
             if (!crossed) continue
             if (o.type === 'banana' && t > spinStart.current[l] + SPIN_OUT_DUR + 0.5) {
               spinStart.current[l] = t
+              sfx('slip', sfxGain(l))
             } else if (o.type === 'portal' && o.delta != null && t > portalUntil.current[l]) {
               dist.current[l] += o.delta
               portalUntil.current[l] = t + 2.5
+              sfx('warp', sfxGain(l))
             }
           }
         }
@@ -403,6 +447,7 @@ export default function Riders({
     // current leader when followTarget is -1.
     const followIdx =
       followTarget >= 0 && followTarget < track.lanes.length ? followTarget : leadIdx
+    setSfxFocus(followIdx)
     const followLane = track.lanes[followIdx]
     if (followLane) {
       const f = sampleCenter(track.center, dist.current[followIdx])

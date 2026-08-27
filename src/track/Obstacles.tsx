@@ -15,6 +15,7 @@ import {
   stopperUp,
 } from './build'
 import { OBSTACLE_GEO as G, OBSTACLE_GLOW_MAT, OBSTACLE_MAT } from './obstacleGeo'
+import { focusGain, sfx } from '../audio'
 
 // Obstacles are voxel-built (100-200 blocks each) from shared merged
 // geometries — see obstacleGeo.ts. Only the moving parts (spinner arm,
@@ -86,6 +87,7 @@ function Crates({
         s.tStart = t
         if (intact.current) intact.current.visible = false
         if (frag.current) frag.current.visible = true
+        sfx('smash', focusGain(lane))
       }
     }
     s.prev = d
