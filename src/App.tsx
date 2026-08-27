@@ -21,7 +21,7 @@ import Scenery from './env/Scenery'
 import { Birds, Lightning } from './env/Weather'
 import { EnvParams, SUMMER, cloneParams } from './env/model'
 import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
-import { initAudio, setAudioEnabled, setCrowd, sfx } from './audio'
+import { cheer, initAudio, setAudioEnabled, setCrowd, sfx } from './audio'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
 import { Fireworks, Grandstands, StartGate, Trackside } from './track/Stadium'
 import './styles.css'
@@ -360,14 +360,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     let n = 3
     setCountdown(3)
     sfx('beep')
-    setCrowd(0.35)
+    setCrowd(0.5) // faint anticipation in the stands
     const tick = () => {
       n -= 1
       if (n >= 0) {
         setCountdown(n) // 2, 1, then 0 = "GO!"
         if (n === 0) {
           sfx('go')
-          setCrowd(0.95, 0.15) // the stands erupt
+          cheer(1, 0.8) // the stands erupt, then fall away
         } else {
           sfx(n === 1 ? 'beepHi' : 'beep')
         }
@@ -375,7 +375,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       } else {
         setCountdown(null)
         onGo() // GO — racing starts and the clock runs
-        setCrowd(0.4, 1.4) // settle to a racing murmur
+        setCrowd(0.25, 2.0) // barely-there hum, so music can sit on top
       }
     }
     cdTimer.current = setTimeout(tick, 700)
@@ -429,8 +429,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   // Called from Riders when an animal crosses the finish.
   const onTrialFinish = (lane: number, time: number) => {
     sfx('finish')
-    setCrowd(0.9, 0.15)
-    setTimeout(() => setCrowd(0.45, 1.2), 900)
+    cheer(0.9, 0.35)
     setTrialTimes((prev) => {
       const n = [...prev]
       n[lane] = time
@@ -456,7 +455,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   useEffect(() => {
     if (trialActive && trialDone) {
       sfx('fanfare')
-      setCrowd(0.85, 0.25)
+      cheer(1, 1.4)
+      setCrowd(0.5, 0.4)
     }
   }, [trialActive, trialDone])
 
@@ -488,7 +488,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     const shape = generateShape(targetLen)
     const laneObstacles = generateLaneObstacles(config.picks.length, targetLen, config.obstaclePct)
     initAudio() // this runs from a click, so the browser lets audio start
-    setCrowd(0.2)
+    setCrowd(0.35)
     setPicks(config.picks)
     setGenerated({ shape, laneObstacles })
     setMode('play')

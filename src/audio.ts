@@ -30,7 +30,8 @@ export type SfxName =
 let ctx: AudioContext | null = null
 let master: GainNode | null = null
 let noise: AudioBuffer | null = null
-let crowd: GainNode | null = null
+let crowdBed: GainNode | null = null
+let crowdCheer: GainNode | null = null
 let enabled = true
 const lastPlayed: Record<string, number> = {}
 
@@ -57,6 +58,20 @@ function makeNoise(c: AudioContext): AudioBuffer {
   return buf
 }
 
+/** Brown noise: integrated white noise — a warm rumble instead of hiss. */
+function makeBrownNoise(c: AudioContext): AudioBuffer {
+  const len = Math.floor(c.sampleRate * 4)
+  const buf = c.createBuffer(1, len, c.sampleRate)
+  const data = buf.getChannelData(0)
+  let last = 0
+  for (let i = 0; i < len; i++) {
+    const w = Math.random() * 2 - 1
+    last = (last + 0.021 * w) / 1.021
+    data[i] = last * 3.6
+  }
+  return buf
+}
+
 /** Create/resume the audio context. Must run from a user gesture. */
 export function initAudio(): void {
   if (ctx) {
@@ -72,24 +87,57 @@ export function initAudio(): void {
   master.connect(ctx.destination)
   noise = makeNoise(ctx)
 
-  // Looping stadium murmur, level controlled by setCrowd().
-  const src = ctx.createBufferSource()
-  src.buffer = noise
-  src.loop = true
-  const bp = ctx.createBiquadFilter()
-  bp.type = 'bandpass'
-  bp.frequency.value = 850
-  bp.Q.value = 0.6
-  const lp = ctx.createBiquadFilter()
-  lp.type = 'lowpass'
-  lp.frequency.value = 2200
-  crowd = ctx.createGain()
-  crowd.gain.value = 0
-  src.connect(bp)
-  bp.connect(lp)
-  lp.connect(crowd)
-  crowd.connect(master)
-  src.start()
+  // Stadium crowd: a warm brown-noise body plus a quiet band of "voices",
+  // breathing on a slow LFO so it reads as a distant crowd, not as hiss.
+  const mix = ctx.createGain()
+  mix.gain.value = 0.65 // LFO swings this between roughly 0.3 and 1.0
+
+  const body = ctx.createBufferSource()
+  body.buffer = makeBrownNoise(ctx)
+  body.loop = true
+  const bodyLp = ctx.createBiquadFilter()
+  bodyLp.type = 'lowpass'
+  bodyLp.frequency.value = 420
+  body.connect(bodyLp)
+  bodyLp.connect(mix)
+  body.start()
+
+  const voices = ctx.createBufferSource()
+  voices.buffer = noise
+  voices.loop = true
+  const voiceBp = ctx.createBiquadFilter()
+  voiceBp.type = 'bandpass'
+  voiceBp.frequency.value = 620
+  voiceBp.Q.value = 1.6
+  const voiceLp = ctx.createBiquadFilter()
+  voiceLp.type = 'lowpass'
+  voiceLp.frequency.value = 1100 // cut the hissy top off entirely
+  const voiceGain = ctx.createGain()
+  voiceGain.gain.value = 0.35
+  voices.connect(voiceBp)
+  voiceBp.connect(voiceLp)
+  voiceLp.connect(voiceGain)
+  voiceGain.connect(mix)
+  voices.start()
+
+  const lfo = ctx.createOscillator()
+  lfo.frequency.value = 0.09
+  const lfoDepth = ctx.createGain()
+  lfoDepth.gain.value = 0.33
+  lfo.connect(lfoDepth)
+  lfoDepth.connect(mix.gain)
+  lfo.start()
+
+  // Two taps: a near-silent bed, and cheers that swell and fall away.
+  crowdBed = ctx.createGain()
+  crowdBed.gain.value = 0
+  mix.connect(crowdBed)
+  crowdBed.connect(master)
+
+  crowdCheer = ctx.createGain()
+  crowdCheer.gain.value = 0
+  mix.connect(crowdCheer)
+  crowdCheer.connect(master)
 }
 
 export function setAudioEnabled(on: boolean): void {
@@ -101,10 +149,25 @@ export function isAudioEnabled(): boolean {
   return enabled
 }
 
-/** Crowd murmur level 0..1 (swell it at the start and finish). */
+/**
+ * Background crowd bed, 0..1. Deliberately faint: a constant noise bed fights
+ * the music that gets added in post, so the crowd mostly lives in cheer().
+ */
 export function setCrowd(level: number, ramp = 0.5): void {
-  if (!ctx || !crowd) return
-  crowd.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * 0.16, ctx.currentTime, ramp)
+  if (!ctx || !crowdBed) return
+  crowdBed.gain.setTargetAtTime(Math.max(0, Math.min(1, level)) * 0.045, ctx.currentTime, ramp)
+}
+
+/** A crowd cheer that swells and falls away (start, finishes, podium). */
+export function cheer(level = 1, hold = 0.5): void {
+  if (!ctx || !crowdCheer || !enabled) return
+  const t = ctx.currentTime
+  const g = crowdCheer.gain
+  g.cancelScheduledValues(t)
+  g.setValueAtTime(Math.max(0.0001, g.value), t)
+  g.linearRampToValueAtTime(Math.max(0.0001, level * 0.11), t + 0.14)
+  g.setValueAtTime(Math.max(0.0001, level * 0.11), t + 0.14 + hold)
+  g.exponentialRampToValueAtTime(0.0001, t + 0.14 + hold + 2.2)
 }
 
 // ---- building blocks ------------------------------------------------------
