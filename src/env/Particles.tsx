@@ -74,6 +74,15 @@ const SPECS: Record<Exclude<ParticleKind, 'none'>, Spec> = {
     opacity: 0.95,
     max: 450,
   },
+  storm: {
+    geometry: () => new THREE.CylinderGeometry(0.014, 0.014, 1.1, 4),
+    colors: ['#8ba6c9', '#a3bcd9', '#7d95b8'],
+    fall: [24, 32],
+    sway: 0,
+    tumble: 0,
+    opacity: 0.55,
+    max: 900,
+  },
   sprinkles: {
     geometry: () => new THREE.BoxGeometry(0.06, 0.06, 0.2),
     colors: ['#ff5e8a', '#4aa3f0', '#59c94f', '#f2b53c', '#b07ce8', '#ffffff'],

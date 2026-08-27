@@ -13,10 +13,24 @@ export interface VoxelBag {
   col: number[] // rgb triples
   gpos: number[] // glowing cubes (lava, lit windows, neon) — unlit material
   gcol: number[]
+  fpos: number[] // foliage cubes — rendered with a wind-sway shader
+  fcol: number[]
+  wpos: number[] // water cubes (falls, rivers) — rendered with a flow shimmer
+  wcol: number[]
   key: number // bump to invalidate the rendered instancing
 }
 
-export const newBag = (): VoxelBag => ({ pos: [], col: [], gpos: [], gcol: [], key: 0 })
+export const newBag = (): VoxelBag => ({
+  pos: [],
+  col: [],
+  gpos: [],
+  gcol: [],
+  fpos: [],
+  fcol: [],
+  wpos: [],
+  wcol: [],
+  key: 0,
+})
 
 const rnd = (n: number) => {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
@@ -40,6 +54,40 @@ function put(
   tmp.set(hex).multiplyScalar(1 - jitter / 2 + rnd(seed + gx * 3.1 + gy * 7.7 + gz * 13.3) * jitter)
   bag.pos.push(ox + gx * VOX, gy * VOX + VOX / 2, oz + gz * VOX)
   bag.col.push(tmp.r, tmp.g, tmp.b)
+}
+
+/** Add a foliage cube (sways in the wind shader). */
+function putF(
+  bag: VoxelBag,
+  ox: number,
+  oz: number,
+  gx: number,
+  gy: number,
+  gz: number,
+  hex: string,
+  seed: number,
+  jitter = 0.14,
+) {
+  tmp.set(hex).multiplyScalar(1 - jitter / 2 + rnd(seed + gx * 3.1 + gy * 7.7 + gz * 13.3) * jitter)
+  bag.fpos.push(ox + gx * VOX, gy * VOX + VOX / 2, oz + gz * VOX)
+  bag.fcol.push(tmp.r, tmp.g, tmp.b)
+}
+
+/** Add a water cube (shimmer-flow shader: waterfalls, rivers). */
+function putW(
+  bag: VoxelBag,
+  ox: number,
+  oz: number,
+  gx: number,
+  gy: number,
+  gz: number,
+  hex: string,
+  seed: number,
+  jitter = 0.14,
+) {
+  tmp.set(hex).multiplyScalar(1 - jitter / 2 + rnd(seed + gx * 3.1 + gy * 7.7 + gz * 13.3) * jitter)
+  bag.wpos.push(ox + gx * VOX, gy * VOX + VOX / 2, oz + gz * VOX)
+  bag.wcol.push(tmp.r, tmp.g, tmp.b)
 }
 
 /** Add a glowing cube (rendered unlit so it shines at night). */
@@ -73,7 +121,9 @@ function blob(
   color: string | ((gx: number, gy: number, gz: number) => string),
   seed: number,
   jitter = 0.14,
+  foliage = false,
 ) {
+  const emit = foliage ? putF : put
   for (let dx = -rx; dx <= rx; dx++)
     for (let dy = -ry; dy <= ry; dy++)
       for (let dz = -rz; dz <= rz; dz++) {
@@ -81,7 +131,7 @@ function blob(
         const w = (rnd(seed + dx * 5 + dy * 11 + dz * 17) - 0.5) * 0.35
         if (d <= 1 + w && d >= 0.42) {
           const c = typeof color === 'string' ? color : color(cx + dx, cy + dy, cz + dz)
-          put(bag, ox, oz, cx + dx, cy + dy, cz + dz, c, seed + dx + dy + dz, jitter)
+          emit(bag, ox, oz, cx + dx, cy + dy, cz + dz, c, seed + dx + dy + dz, jitter)
         }
       }
 }
@@ -98,7 +148,7 @@ export function vTree(bag: VoxelBag, ox: number, oz: number, seed: number, leaf:
   for (let y = 0; y < trunkH; y++)
     for (let dx = -tw; dx <= tw; dx++)
       for (let dz = -tw; dz <= tw; dz++) put(bag, ox, oz, dx, y, dz, '#7a5236', seed + y + dx + dz, 0.1)
-  blob(bag, ox, oz, 0, trunkH + ry - 2, 0, r, ry, r, (_gx, gy) => (gy > trunkH + ry ? dark : leaf), seed + 7)
+  blob(bag, ox, oz, 0, trunkH + ry - 2, 0, r, ry, r, (_gx, gy) => (gy > trunkH + ry ? dark : leaf), seed + 7, 0.14, true)
 }
 
 /** Tall column tree (two stacked canopy blobs) for backdrop forests. */
@@ -108,8 +158,8 @@ export function vTallTree(bag: VoxelBag, ox: number, oz: number, seed: number, l
     put(bag, ox, oz, 0, y, 0, '#7a5236', seed + y, 0.1)
     put(bag, ox, oz, 1, y, 0, '#6d4a2f', seed + y + 40, 0.1)
   }
-  blob(bag, ox, oz, 0, trunkH - 1, 0, 6, 5, 6, leaf, seed + 9)
-  blob(bag, ox, oz, 0, trunkH + 6, 0, 4, 4, 4, `#${tmp.set(leaf).multiplyScalar(0.85).getHexString()}`, seed + 11)
+  blob(bag, ox, oz, 0, trunkH - 1, 0, 6, 5, 6, leaf, seed + 9, 0.14, true)
+  blob(bag, ox, oz, 0, trunkH + 6, 0, 4, 4, 4, `#${tmp.set(leaf).multiplyScalar(0.85).getHexString()}`, seed + 11, 0.14, true)
 }
 
 /** Savanna acacia: leaning trunk and a wide, flat canopy disc (~900 cubes). */
@@ -129,9 +179,9 @@ export function vAcacia(bag: VoxelBag, ox: number, oz: number, seed: number, lea
     for (let dz = -r; dz <= r; dz++) {
       const d = Math.sqrt(dx * dx + dz * dz)
       if (d <= r + (rnd(seed + dx * 7 + dz * 13) - 0.5) * 1.5) {
-        put(bag, ox, oz, lx + dx, h, dz, leaf, seed + dx + dz)
-        if (d <= r * 0.8) put(bag, ox, oz, lx + dx, h + 1, dz, dark, seed + dx + dz + 99)
-        if (d <= r * 0.4) put(bag, ox, oz, lx + dx, h + 2, dz, leaf, seed + dx + dz + 151)
+        putF(bag, ox, oz, lx + dx, h, dz, leaf, seed + dx + dz)
+        if (d <= r * 0.8) putF(bag, ox, oz, lx + dx, h + 1, dz, dark, seed + dx + dz + 99)
+        if (d <= r * 0.4) putF(bag, ox, oz, lx + dx, h + 2, dz, leaf, seed + dx + dz + 151)
       }
     }
 }
@@ -206,8 +256,8 @@ export function vPlateau(
     const sx = ax === 0 ? side : 0
     const sz = az === 0 ? side : 0
     for (let y = 0; y <= h; y++)
-      put(bag, ox, oz, ex + ax + sx, y, ez + az + sz, y === h ? liquid.foam : liquid.fall, seed + y + side * 40, 0.18)
-    put(bag, ox, oz, ex + ax * 2 + sx, 0, ez + az * 2 + sz, liquid.foam, seed + side * 60, 0.05) // foam
+      putW(bag, ox, oz, ex + ax + sx, y, ez + az + sz, y === h ? liquid.foam : liquid.fall, seed + y + side * 40, 0.18)
+    putW(bag, ox, oz, ex + ax * 2 + sx, 0, ez + az * 2 + sz, liquid.foam, seed + side * 60, 0.05) // foam
   }
   let rx = ex + ax * 3
   let rz = ez + az * 3
@@ -216,7 +266,7 @@ export function vPlateau(
     for (let side = -1; side <= 2; side++) {
       const sx = ax === 0 ? side : 0
       const sz = az === 0 ? side : 0
-      put(bag, ox, oz, rx + sx, 0, rz + sz, i === 0 ? liquid.foam : liquid.river, seed + i * 7 + side, 0.16)
+      putW(bag, ox, oz, rx + sx, 0, rz + sz, i === 0 ? liquid.foam : liquid.river, seed + i * 7 + side, 0.16)
     }
     rx += ax + (ax === 0 ? Math.round(rnd(seed + i * 11) * 2 - 1) : 0)
     rz += az + (az === 0 ? Math.round(rnd(seed + i * 13) * 2 - 1) : 0)
@@ -226,7 +276,7 @@ export function vPlateau(
 /** Round leaf-cube bush. */
 export function vBush(bag: VoxelBag, ox: number, oz: number, seed: number, leaf: string) {
   const r = 3 + Math.floor(rnd(seed) * 3)
-  blob(bag, ox, oz, 0, Math.round(r * 0.4), 0, r, Math.max(2, Math.round(r * 0.7)), r, leaf, seed)
+  blob(bag, ox, oz, 0, Math.round(r * 0.4), 0, r, Math.max(2, Math.round(r * 0.7)), r, leaf, seed, 0.14, true)
 }
 
 const FLOWER_HEADS = ['#ff5e5e', '#ffd447', '#ff8ab5', '#b07ce8', '#ffffff']
@@ -266,7 +316,7 @@ export function vFloe(bag: VoxelBag, ox: number, oz: number, seed: number) {
     for (let dz = -r - 3; dz <= r + 3; dz++) {
       const d = Math.sqrt(dx * dx + dz * dz)
       if (d <= r) put(bag, ox, oz, dx, 0, dz, '#eaf5fb', seed + dx + dz, 0.06)
-      else if (d <= r + 3) put(bag, ox, oz, dx, 0, dz, '#4db4f5', seed + dx * 3 + dz * 5, 0.15)
+      else if (d <= r + 3) putW(bag, ox, oz, dx, 0, dz, '#4db4f5', seed + dx * 3 + dz * 5, 0.15)
     }
   if (rnd(seed + 9) > 0.5) blob(bag, ox, oz, 0, 1, 0, 2, 1, 2, '#ffffff', seed + 10, 0.04)
 }
@@ -279,8 +329,15 @@ export function vDrift(bag: VoxelBag, ox: number, oz: number, seed: number) {
 
 const WALL_COLORS = ['#f0605a', '#4aa3f0', '#59c94f', '#f2b53c', '#9b6cf0', '#f078c2', '#3ecfc0', '#f28c3c']
 
+export interface SmokeSpot {
+  x: number
+  y: number
+  z: number
+  dark?: boolean
+}
+
 /** Voxel city building: block grid with 2x2 window panes on every face. */
-export function vBuilding(bag: VoxelBag, ox: number, oz: number, seed: number, big = false) {
+export function vBuilding(bag: VoxelBag, ox: number, oz: number, seed: number, big = false): SmokeSpot {
   const wall = WALL_COLORS[Math.floor(rnd(seed) * WALL_COLORS.length)]
   const roof = `#${tmp.set(wall).multiplyScalar(0.62).getHexString()}`
   const fw = 4 + Math.floor(rnd(seed + 1) * (big ? 4 : 3)) // half-width
@@ -304,6 +361,10 @@ export function vBuilding(bag: VoxelBag, ox: number, oz: number, seed: number, b
   // door: 2 wide, 3 high on the +z face
   for (let dx = 0; dx <= 1; dx++)
     for (let y = 0; y < 3; y++) put(bag, ox, oz, dx, y, fd + 0.001, '#5a4632', seed + 900 + dx + y, 0.05)
+  // chimney block at a roof corner
+  put(bag, ox, oz, fw - 1, h, fd - 1, '#8a5a34', seed + 950, 0.08)
+  put(bag, ox, oz, fw - 1, h + 1, fd - 1, '#6d4326', seed + 951, 0.08)
+  return { x: ox + (fw - 1) * VOX, y: (h + 2) * VOX, z: oz + (fd - 1) * VOX }
 }
 
 /** Street lamp: pole + glowing head (the head shines unlit at night). */
@@ -319,7 +380,7 @@ export function vLamp(bag: VoxelBag, ox: number, oz: number, seed: number, lit =
 // ==== World-specific structures ============================================
 
 /** Volcano cone: dark basalt with a glowing crater and lava streaks. */
-export function vVolcano(bag: VoxelBag, ox: number, oz: number, seed: number, big = false) {
+export function vVolcano(bag: VoxelBag, ox: number, oz: number, seed: number, big = false): SmokeSpot {
   const r0 = big ? 14 + Math.floor(rnd(seed) * 5) : 9 + Math.floor(rnd(seed) * 4)
   const h = Math.round(r0 * (1.3 + rnd(seed + 1) * 0.4))
   for (let dx = -r0; dx <= r0; dx++)
@@ -350,6 +411,7 @@ export function vVolcano(bag: VoxelBag, ox: number, oz: number, seed: number, bi
       putG(bag, ox, oz, Math.round(ux * rr), y, Math.round(uz * rr), i % 2 ? '#ff6a1a' : '#e8471a', seed + sIdx * 30 + i, 0.12)
     }
   }
+  return { x: ox, y: h * VOX, z: oz, dark: true }
 }
 
 /** Charred dead tree with ember tips. */
@@ -439,7 +501,7 @@ const NIGHT_WALLS = ['#2a3242', '#323a4e', '#3a2f4a', '#2f3f42', '#40303a']
 const NEONS = ['#ff4fd8', '#3ecfff', '#5aff8a', '#ffd21a']
 
 /** Night-city tower: dark walls, lit windows, neon roof trim. */
-export function vBuildingNight(bag: VoxelBag, ox: number, oz: number, seed: number, big = false) {
+export function vBuildingNight(bag: VoxelBag, ox: number, oz: number, seed: number, big = false): SmokeSpot {
   const wall = NIGHT_WALLS[Math.floor(rnd(seed) * NIGHT_WALLS.length)]
   const neon = NEONS[Math.floor(rnd(seed + 4) * NEONS.length)]
   const fw = 4 + Math.floor(rnd(seed + 1) * (big ? 4 : 3))
@@ -469,6 +531,7 @@ export function vBuildingNight(bag: VoxelBag, ox: number, oz: number, seed: numb
   // glowing doorway
   for (let dx = 0; dx <= 1; dx++)
     for (let y = 0; y < 3; y++) putG(bag, ox, oz, dx, y, fd + 0.001, '#3ecfff', seed + 900 + dx + y, 0.05)
+  return { x: ox + (fw - 1) * VOX, y: h * VOX, z: oz + (fd - 1) * VOX, dark: true }
 }
 
 /** Palm tree: leaning trunk with drooping frond arms. */
@@ -490,9 +553,9 @@ export function vPalm(bag: VoxelBag, ox: number, oz: number, seed: number) {
     const uz = Math.sin(a)
     for (let i = 1; i <= 6; i++) {
       const droop = Math.max(0, i - 3)
-      put(bag, ox, oz, lx + Math.round(ux * i), h + 1 - droop, Math.round(uz * i),
+      putF(bag, ox, oz, lx + Math.round(ux * i), h + 1 - droop, Math.round(uz * i),
           i % 2 ? '#4cae3d' : '#3f9a33', seed + fIdx * 20 + i, 0.1)
-      if (i > 2) put(bag, ox, oz, lx + Math.round(ux * i), h - droop, Math.round(uz * i), '#3f9a33', seed + fIdx * 20 + i + 60, 0.1)
+      if (i > 2) putF(bag, ox, oz, lx + Math.round(ux * i), h - droop, Math.round(uz * i), '#3f9a33', seed + fIdx * 20 + i + 60, 0.1)
     }
   }
 }

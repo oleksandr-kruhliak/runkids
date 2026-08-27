@@ -5,7 +5,8 @@ import * as THREE from 'three'
 import { RIDE_OFFSET, buildTrack, sampleCenter } from '../track/build'
 import { PieceType } from '../track/pieces'
 import VoxelRoad from '../track/VoxelRoad'
-import Sky from '../track/Sky'
+import Sky, { sunDirection, sunTint } from '../track/Sky'
+import { Birds, Lightning } from './Weather'
 import Animal, { ANIMAL_PALETTES } from '../track/Animal'
 import Particles from './Particles'
 import Scenery from './Scenery'
@@ -36,7 +37,7 @@ const PREVIEW_SHAPE: PieceType[] = [
 ]
 const PREVIEW_LANES: PieceType[][] = [[], [], []]
 
-const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain']
+const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain', 'embers', 'sprinkles', 'storm']
 const EXTRAS: SceneryExtra[] = ['none', 'snowman', 'pumpkin', 'flowers']
 const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city', 'volcano', 'candy', 'nightcity', 'beach', 'moon']
 
@@ -183,10 +184,18 @@ export default function EnvStudio({
         <Canvas shadows camera={{ position: [22, 14, 26], fov: 50 }} dpr={[1, 2]}>
           <color attach="background" args={[p.sky.horizon]} />
           <fog attach="fog" args={[p.sky.horizon, 70, 220]} />
-          <Sky zenith={p.sky.zenith} mid={p.sky.mid} horizon={p.sky.horizon} clouds={p.clouds} night={p.night} />
+          <Sky
+            zenith={p.sky.zenith}
+            mid={p.sky.mid}
+            horizon={p.sky.horizon}
+            clouds={p.clouds}
+            night={p.night}
+            sunElev={p.sunElev ?? 55}
+          />
           <hemisphereLight args={p.night ? ['#4a5a8a', '#1c2438', 0.5] : ['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
-            position={[24, 34, 14]}
+            position={sunDirection(p.sunElev ?? 55).multiplyScalar(44).toArray() as [number, number, number]}
+            color={p.night ? '#aebadd' : sunTint(p.sunElev ?? 55)}
             intensity={p.sun}
             castShadow
             shadow-mapSize={[1024, 1024]}
@@ -212,6 +221,8 @@ export default function EnvStudio({
             center={track.boundsCenter}
             radius={track.radius + 14}
           />
+          <Birds center={track.boundsCenter} radius={track.radius} flocks={p.birds ?? (p.night ? 0 : 2)} />
+          {p.particles === 'storm' && <Lightning center={track.boundsCenter} radius={track.radius} />}
           <OrbitControls
             makeDefault
             enableDamping
@@ -293,6 +304,24 @@ export default function EnvStudio({
             value={p.sun}
             format={(v) => v.toFixed(2)}
             onChange={(v) => patch({ sun: v })}
+          />
+          <SliderRow
+            label="Sun height"
+            min={8}
+            max={80}
+            step={2}
+            value={p.sunElev ?? 55}
+            format={(v) => `${v}°`}
+            onChange={(v) => patch({ sunElev: Math.round(v) })}
+          />
+          <SliderRow
+            label="Birds"
+            min={0}
+            max={6}
+            step={1}
+            value={p.birds ?? (p.night ? 0 : 2)}
+            format={(v) => `${v}`}
+            onChange={(v) => patch({ birds: Math.round(v) })}
           />
           <SliderRow
             label="Jump power"

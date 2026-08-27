@@ -2,7 +2,7 @@
 // (sky gradient, ground/grass colours, light, clouds, falling particles)
 // that skins the race world — winter, autumn, spring, summer, or anything.
 
-export type ParticleKind = 'none' | 'snow' | 'leaves' | 'petals' | 'rain' | 'embers' | 'sprinkles'
+export type ParticleKind = 'none' | 'snow' | 'leaves' | 'petals' | 'rain' | 'embers' | 'sprinkles' | 'storm'
 export type SceneryExtra = 'none' | 'snowman' | 'pumpkin' | 'flowers'
 /** Which asset family fills the field: the classic low-poly props, or one of
  * the voxel world sets (cube trees, block mountains, city buildings...). */
@@ -33,6 +33,10 @@ export interface EnvParams {
   night?: boolean
   /** Jump-height multiplier (moon gravity!). Default 1. */
   jump?: number
+  /** Sun elevation in degrees, 8..80 (low = golden hour). Default 55. */
+  sunElev?: number
+  /** Flocks of flying birds, 0..6. Defaults: 2 by day, 0 at night. */
+  birds?: number
   /** Primitive-built props scattered around the field. */
   scenery: {
     /** 0–100 amount of trees/rocks/bushes. */
@@ -81,6 +85,7 @@ export const PARTICLE_META: Record<ParticleKind, { icon: string; label: string }
   rain: { icon: '🌧', label: 'Rain' },
   embers: { icon: '🔥', label: 'Embers' },
   sprinkles: { icon: '🍬', label: 'Sprinkles' },
+  storm: { icon: '⛈', label: 'Storm' },
 }
 
 export const SUMMER: EnvParams = {
@@ -154,6 +159,7 @@ export const WORLDS: { key: string; icon: string; label: string; params: EnvPara
       sky: { zenith: '#1e90f0', mid: '#7cc4f8', horizon: '#d8f2ff' },
       clouds: 12,
       sun: 1.65,
+      birds: 3,
       ground: '#5fd438',
       grass: '#6fe243',
       particles: 'none',
@@ -169,6 +175,8 @@ export const WORLDS: { key: string; icon: string; label: string; params: EnvPara
       sky: { zenith: '#e8933a', mid: '#f7b64f', horizon: '#ffd98a' },
       clouds: 6,
       sun: 1.35,
+      sunElev: 14,
+      birds: 2,
       ground: '#d9a648',
       grass: '#e0b556',
       particles: 'none',
@@ -263,6 +271,7 @@ export const WORLDS2: { key: string; icon: string; label: string; params: EnvPar
       sky: { zenith: '#1e90f0', mid: '#7cc4f8', horizon: '#e0f6ff' },
       clouds: 8,
       sun: 1.75,
+      birds: 3,
       ground: '#f2dca2',
       grass: '#e8cf9a',
       particles: 'none',
@@ -304,7 +313,7 @@ export function newEnvDesign(params: EnvParams = SUMMER, name = 'My Environment'
   return { id: uid(), name, updated: Date.now(), params: cloneParams(params) }
 }
 
-const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain', 'embers', 'sprinkles']
+const KINDS: ParticleKind[] = ['none', 'snow', 'leaves', 'petals', 'rain', 'embers', 'sprinkles', 'storm']
 const EXTRAS: SceneryExtra[] = ['none', 'snowman', 'pumpkin', 'flowers']
 const SETS: ScenerySet[] = ['classic', 'forest', 'savanna', 'snowy', 'city', 'volcano', 'candy', 'nightcity', 'beach', 'moon']
 const color = (v: unknown, fb: string) =>
@@ -331,6 +340,8 @@ export function coerceEnv(v: any): EnvDesign | null {
     particleDensity: Math.round(num(p.particleDensity, 0, 0, 100)),
     night: p.night === true,
     jump: num(p.jump, 1, 0.5, 2.5),
+    sunElev: num(p.sunElev, 55, 8, 80),
+    birds: Math.round(num(p.birds, p.night === true ? 0 : 2, 0, 6)),
     scenery: {
       density: Math.round(num(p.scenery?.density, SUMMER.scenery.density, 0, 100)),
       tree: color(p.scenery?.tree, SUMMER.scenery.tree),

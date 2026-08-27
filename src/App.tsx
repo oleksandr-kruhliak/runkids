@@ -15,9 +15,10 @@ import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
 import VoxelRoad from './track/VoxelRoad'
-import Sky from './track/Sky'
+import Sky, { sunDirection, sunTint } from './track/Sky'
 import Particles from './env/Particles'
 import Scenery from './env/Scenery'
+import { Birds, Lightning } from './env/Weather'
 import { EnvParams, SUMMER, cloneParams } from './env/model'
 import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
@@ -603,6 +604,12 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     [ranking, racers],
   )
 
+  // Key light follows the environment's sun elevation (golden hour!).
+  const sunPos = useMemo<[number, number, number]>(() => {
+    const d = sunDirection(env.sunElev ?? 55).multiplyScalar(44)
+    return [d.x, Math.max(8, d.y), d.z]
+  }, [env.sunElev])
+
   // While the intro card is up, frame the starting line so the racers are in
   // shot behind the card.
   const introFocus = useMemo<FocusSpec | null>(() => {
@@ -688,10 +695,12 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             horizon={env.sky.horizon}
             clouds={env.clouds}
             night={env.night}
+            sunElev={env.sunElev ?? 55}
           />
           <hemisphereLight args={env.night ? ['#4a5a8a', '#1c2438', 0.5] : ['#ffffff', '#9db4c0', 0.9]} />
           <directionalLight
-            position={[24, 34, 14]}
+            position={sunPos}
+            color={env.night ? '#aebadd' : sunTint(env.sunElev ?? 55)}
             intensity={env.sun}
             castShadow
             shadow-mapSize={[2048, 2048]}
@@ -762,6 +771,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             center={track.boundsCenter}
             radius={track.radius + 18}
           />
+          <Birds
+            center={track.boundsCenter}
+            radius={track.radius}
+            flocks={env.birds ?? (env.night ? 0 : 2)}
+          />
+          {env.particles === 'storm' && (
+            <Lightning center={track.boundsCenter} radius={track.radius} />
+          )}
 
           <CameraRig
             center={track.boundsCenter}

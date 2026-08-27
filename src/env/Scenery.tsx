@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { LANE_SPACING, NUM_LANES, Track } from '../track/build'
 import { EnvParams, SceneryExtra } from './model'
 import {
+  SmokeSpot,
   VOX,
   VoxelBag,
   newBag,
@@ -297,10 +298,128 @@ function Balloon({ s, seed }: { s: number; seed: number }) {
 
 let bagCounter = 0
 
+/** Standard material whose vertices sway like wind-blown foliage. */
+function useWindMaterial() {
+  const time = useMemo(() => ({ value: 0 }), [])
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ roughness: 0.85 })
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = time
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vec4 wOrigin = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+            float lift = smoothstep(0.6, 3.2, wOrigin.y);
+            transformed.x += sin(uTime * 1.6 + wOrigin.x * 0.35 + wOrigin.z * 0.27) * 0.12 * lift;
+            transformed.z += cos(uTime * 1.25 + wOrigin.z * 0.31 + wOrigin.x * 0.2) * 0.08 * lift;
+          #endif`,
+        )
+    }
+    return m
+  }, [time])
+  useFrame((state) => {
+    time.value = state.clock.elapsedTime
+  })
+  return mat
+}
+
+/** Standard material with a downward-running brightness shimmer (water). */
+function useFlowMaterial() {
+  const time = useMemo(() => ({ value: 0 }), [])
+  const mat = useMemo(() => {
+    const m = new THREE.MeshStandardMaterial({ roughness: 0.5 })
+    m.onBeforeCompile = (sh) => {
+      sh.uniforms.uTime = time
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nvarying vec3 vFlowPos;')
+        .replace(
+          '#include <begin_vertex>',
+          `#include <begin_vertex>
+          #ifdef USE_INSTANCING
+            vFlowPos = (instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+          #else
+            vFlowPos = position;
+          #endif`,
+        )
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uTime;\nvarying vec3 vFlowPos;')
+        .replace(
+          '#include <color_fragment>',
+          `#include <color_fragment>
+          diffuseColor.rgb *= 0.82 + 0.3 * sin(uTime * 5.0 - vFlowPos.y * 6.0 - (vFlowPos.x + vFlowPos.z) * 1.7);`,
+        )
+    }
+    return m
+  }, [time])
+  useFrame((state) => {
+    time.value = state.clock.elapsedTime
+  })
+  return mat
+}
+
+const PUFFS = 5
+
+/** Chimney / crater smoke: looping puffs that rise, drift, and grow. */
+function Smoke({ spots }: { spots: SmokeSpot[] }) {
+  const ref = useRef<THREE.InstancedMesh>(null)
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+  useFrame((state) => {
+    const inst = ref.current
+    if (!inst) return
+    const t = state.clock.elapsedTime
+    let idx = 0
+    spots.forEach((sp, i) => {
+      const phase = rnd(i * 13 + 1)
+      for (let k = 0; k < PUFFS; k++) {
+        const p = (t * 0.22 + phase + k / PUFFS) % 1
+        dummy.position.set(
+          sp.x + Math.sin(t * 0.6 + phase * 9 + k) * 0.35 * p,
+          sp.y + p * 3.4,
+          sp.z + Math.cos(t * 0.5 + phase * 7 + k) * 0.3 * p,
+        )
+        dummy.scale.setScalar(0.28 + p * 0.85)
+        dummy.updateMatrix()
+        inst.setMatrixAt(idx++, dummy.matrix)
+      }
+    })
+    inst.instanceMatrix.needsUpdate = true
+  })
+  if (spots.length === 0) return null
+  return (
+    <instancedMesh
+      key={spots.length}
+      ref={(inst) => {
+        ;(ref as React.MutableRefObject<THREE.InstancedMesh | null>).current = inst
+        if (!inst) return
+        const c = new THREE.Color()
+        spots.forEach((sp, i) => {
+          for (let k = 0; k < PUFFS; k++) {
+            c.set(sp.dark ? '#3d3a42' : '#cfd4da').multiplyScalar(0.9 + rnd(i * 7 + k) * 0.2)
+            inst.setColorAt(i * PUFFS + k, c)
+          }
+        })
+        if (inst.instanceColor) inst.instanceColor.needsUpdate = true
+      }}
+      args={[undefined, undefined, spots.length * PUFFS]}
+      frustumCulled={false}
+    >
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial transparent opacity={0.5} depthWrite={false} roughness={1} />
+    </instancedMesh>
+  )
+}
+
 /** Draws a whole VoxelBag: one lit instanced mesh + one unlit glow mesh. */
 function VoxelField({ bag }: { bag: VoxelBag }) {
   const count = bag.pos.length / 3
   const glowCount = bag.gpos.length / 3
+  const leafCount = bag.fpos.length / 3
+  const waterCount = bag.wpos.length / 3
+  const windMat = useWindMaterial()
+  const flowMat = useFlowMaterial()
   const matrix = useMemo(() => new THREE.Matrix4(), [])
   const color = useMemo(() => new THREE.Color(), [])
   const fill = (
@@ -341,6 +460,27 @@ function VoxelField({ bag }: { bag: VoxelBag }) {
         >
           <boxGeometry args={[VOX, VOX, VOX]} />
           <meshBasicMaterial fog={false} />
+        </instancedMesh>
+      )}
+      {leafCount > 0 && (
+        <instancedMesh
+          key={bag.key + 2000000}
+          args={[undefined, undefined, leafCount]}
+          material={windMat}
+          castShadow
+          ref={(inst) => fill(inst, bag.fpos, bag.fcol, leafCount)}
+        >
+          <boxGeometry args={[VOX, VOX, VOX]} />
+        </instancedMesh>
+      )}
+      {waterCount > 0 && (
+        <instancedMesh
+          key={bag.key + 3000000}
+          args={[undefined, undefined, waterCount]}
+          material={flowMat}
+          ref={(inst) => fill(inst, bag.wpos, bag.wcol, waterCount)}
+        >
+          <boxGeometry args={[VOX, VOX, VOX]} />
         </instancedMesh>
       )}
     </group>
@@ -438,6 +578,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     const bag = newBag()
     bag.key = ++bagCounter
     const jsx: Item[] = []
+    const smoke: SmokeSpot[] = []
     const cx = track.boundsCenter.x
     const cz = track.boundsCenter.z
     const half = track.radius + REACH
@@ -504,15 +645,17 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           } else if (t < 0.11 && ferris < 1 && room > 4.5) {
             ferris++
             jsx.push({ key: jsx.length, kind: 'ferris', pos: [sp.x, 0, sp.z], rot: rnd(sp.seed) * Math.PI, scale: 1.1, seed: sp.seed })
-          } else if (t < 0.56 && room > 2.5) vBuilding(bag, sp.x, sp.z, sp.seed)
-          else if (t < 0.56) vTree(bag, sp.x, sp.z, sp.seed, tree)
+          } else if (t < 0.56 && room > 2.5) {
+            const spot = vBuilding(bag, sp.x, sp.z, sp.seed)
+            if (rnd(sp.seed + 77) > 0.5) smoke.push(spot)
+          } else if (t < 0.56) vTree(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.72) vTree(bag, sp.x, sp.z, sp.seed, tree)
           else if (t < 0.8) vLamp(bag, sp.x, sp.z, sp.seed)
           else if (t < 0.9) vFlowers(bag, sp.x, sp.z, sp.seed)
           else vBush(bag, sp.x, sp.z, sp.seed, tree)
           break
         case 'volcano':
-          if (t < 0.2 && room > 6) vVolcano(bag, sp.x, sp.z, sp.seed)
+          if (t < 0.2 && room > 6) smoke.push(vVolcano(bag, sp.x, sp.z, sp.seed))
           else if (t < 0.45) vBurntTree(bag, sp.x, sp.z, sp.seed)
           else if (t < 0.65 && room > 2.5) vLavaPool(bag, sp.x, sp.z, sp.seed)
           else if (t < 0.85) vRocks(bag, sp.x, sp.z, sp.seed)
@@ -529,7 +672,10 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           else vFlowers(bag, sp.x, sp.z, sp.seed)
           break
         case 'nightcity':
-          if (t < 0.55 && room > 2.5) vBuildingNight(bag, sp.x, sp.z, sp.seed)
+          if (t < 0.55 && room > 2.5) {
+            const spot = vBuildingNight(bag, sp.x, sp.z, sp.seed)
+            if (rnd(sp.seed + 77) > 0.6) smoke.push(spot)
+          }
           else if (t < 0.55) vLamp(bag, sp.x, sp.z, sp.seed, true)
           else if (t < 0.72) vLamp(bag, sp.x, sp.z, sp.seed, true)
           else if (t < 0.88) vTree(bag, sp.x, sp.z, sp.seed, tree)
@@ -579,7 +725,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           vBuilding(bag, x, z, seed, true)
           break
         case 'volcano':
-          vVolcano(bag, x, z, seed, true)
+          smoke.push(vVolcano(bag, x, z, seed, true))
           break
         case 'candy':
           vLollipop(bag, x, z, seed)
@@ -597,7 +743,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
       }
     }
 
-    return { bag, jsx }
+    return { bag, jsx, smoke }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVoxel, track, density, tree, extra, set, grassTop])
 
@@ -630,6 +776,7 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
   return (
     <group>
       {voxel && <VoxelField bag={voxel.bag} />}
+      {voxel && <Smoke spots={voxel.smoke} />}
       {voxel?.jsx.map((it) => (
         <group key={it.key} position={it.pos} rotation={[0, it.rot, 0]}>
           {renderJsx(it)}

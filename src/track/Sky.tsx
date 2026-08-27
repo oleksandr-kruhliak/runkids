@@ -54,7 +54,24 @@ function Dome({ zenith, mid, horizon }: { zenith: string; mid: string; horizon: 
   )
 }
 
-function Sun() {
+/** Direction of the sun for a given elevation (shared with the key light). */
+export function sunDirection(elevDeg: number): THREE.Vector3 {
+  const elev = (elevDeg * Math.PI) / 180
+  const az = 0.56 // fixed azimuth, matches the classic light angle
+  return new THREE.Vector3(
+    Math.cos(elev) * Math.cos(az),
+    Math.sin(elev),
+    Math.cos(elev) * Math.sin(az),
+  )
+}
+
+/** Warm the light as the sun drops toward the horizon (golden hour). */
+export function sunTint(elevDeg: number): string {
+  const k = Math.max(0, Math.min(1, (32 - elevDeg) / 26))
+  return `#${new THREE.Color('#ffffff').lerp(new THREE.Color('#ff9a3c'), k * 0.75).getHexString()}`
+}
+
+function Sun({ elevDeg }: { elevDeg: number }) {
   // A friendly cube sun with little ray blocks, matching the voxel look.
   // Sits along the key-light direction so shading matches the sky.
   const rays = useMemo(
@@ -68,20 +85,24 @@ function Sun() {
       }),
     [],
   )
+  const pos = useMemo(() => sunDirection(elevDeg).multiplyScalar(430), [elevDeg])
+  const low = elevDeg < 30
+  const body = low ? '#ffb54f' : '#ffe36b'
+  const halo = low ? '#ff9a3c' : '#ffd94f'
   return (
-    <group position={[240, 330, 150]} rotation={[0, Math.atan2(240, 150), 0]}>
+    <group position={pos} rotation={[0, Math.atan2(pos.x, pos.z), 0]}>
       <mesh>
         <boxGeometry args={[52, 52, 10]} />
-        <meshBasicMaterial color="#ffe36b" fog={false} />
+        <meshBasicMaterial color={body} fog={false} />
       </mesh>
       <mesh position={[0, 0, -2]}>
         <boxGeometry args={[68, 68, 6]} />
-        <meshBasicMaterial color="#ffd94f" transparent opacity={0.35} fog={false} />
+        <meshBasicMaterial color={halo} transparent opacity={0.35} fog={false} />
       </mesh>
       {rays.map((r, i) => (
         <mesh key={i} position={r.pos}>
           <boxGeometry args={[r.s, r.s, 6]} />
-          <meshBasicMaterial color="#ffe36b" fog={false} />
+          <meshBasicMaterial color={body} fog={false} />
         </mesh>
       ))}
     </group>
@@ -137,6 +158,8 @@ interface SkyProps {
   clouds?: number
   /** Starfield + moon instead of the sun; clouds turn to dark silhouettes. */
   night?: boolean
+  /** Sun elevation in degrees (low = golden hour). */
+  sunElev?: number
 }
 
 /** A scattering of star cubes on the upper dome, plus a pale voxel moon. */
@@ -198,6 +221,7 @@ export default function Sky({
   horizon = SKY_HORIZON,
   clouds: cloudCount = CLOUD_COUNT,
   night = false,
+  sunElev = 55,
 }: SkyProps) {
   const cloudsRef = useRef<THREE.Group>(null)
   const clouds = useMemo(
@@ -226,7 +250,7 @@ export default function Sky({
   return (
     <group>
       <Dome zenith={zenith} mid={mid} horizon={horizon} />
-      {night ? <NightLights /> : <Sun />}
+      {night ? <NightLights /> : <Sun elevDeg={sunElev} />}
       <group ref={cloudsRef}>
         {clouds.map((c) => (
           <group key={c.seed} position={c.pos} rotation={[0, c.rotY, 0]}>
