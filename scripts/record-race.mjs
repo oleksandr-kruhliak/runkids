@@ -9,7 +9,10 @@
 // Options:
 //   --env <name>       Environment chip to pick: Summer | Winter | Autumn |
 //                      Spring | any saved custom name        (default Summer)
-//   --mode <gp|trial>  Grand Prix (all at once) or Time Trial (default gp)
+//   --mode <gp|trial|cup>  Grand Prix (all at once), Time Trial, or a
+//                      Tournament cup: heats then a final   (default gp)
+//   --heat <n>         Tournament: racers per heat (2-4)     (default 3)
+//   --advance <n>      Tournament: how many advance per heat (default 1)
 //   --racers <n>       How many racers (2–8)                 (default 4)
 //   --lap <seconds>    Average lap length slider             (default 8)
 //   --obstacles <pct>  Obstacle density slider 0–100         (default 40)
@@ -34,7 +37,10 @@ const flag = (name) => args.includes(`--${name}`)
 
 const env = opt('env', 'Summer')
 const mode = opt('mode', 'gp')
-const racers = Math.max(2, Math.min(8, parseInt(opt('racers', '4'), 10)))
+const isCup = mode === 'cup' || mode === 'tournament'
+const racers = Math.max(2, Math.min(isCup ? 16 : 8, parseInt(opt('racers', isCup ? '9' : '4'), 10)))
+const heat = Math.max(2, Math.min(4, parseInt(opt('heat', '3'), 10)))
+const advance = Math.max(1, Math.min(heat - 1, parseInt(opt('advance', '1'), 10)))
 const lap = parseInt(opt('lap', '8'), 10)
 const obstacles = parseInt(opt('obstacles', '40'), 10)
 const out = opt('out', `race-${Date.now()}.webm`)
@@ -45,7 +51,11 @@ const url = opt('url', 'http://localhost:5173')
 const videoDir = join(tmpdir(), `runkids-rec-${Date.now()}`)
 mkdirSync(videoDir, { recursive: true })
 
-console.log(`Recording: env=${env} mode=${mode} racers=${racers} lap=${lap}s obstacles=${obstacles}% → ${out}`)
+console.log(
+  `Recording: env=${env} mode=${mode} racers=${racers}` +
+    (isCup ? ` heat=${heat} advance=${advance}` : '') +
+    ` lap=${lap}s obstacles=${obstacles}% → ${out}`,
+)
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true }).catch((e) => {
   console.error('Could not launch Chrome:', e.message)
@@ -69,6 +79,11 @@ try {
   await page.waitForSelector('.racer-card', { timeout: 15000 })
   await page.waitForTimeout(600)
 
+  // A cup raises the entrant cap, so choose the style before picking racers.
+  await page.click(
+    `.mode-card:has-text("${isCup ? 'Tournament' : mode === 'trial' ? 'Time Trial' : 'Grand Prix'}")`,
+  )
+
   // Racers: clear the default selection, then pick the first N cards.
   while ((await page.locator('.racer-card.on').count()) > 0) {
     await page.locator('.racer-card.on').first().click()
@@ -78,23 +93,44 @@ try {
     await page.locator('.racer-card').nth(i).click()
   }
 
-  // Race style + environment + sliders.
-  await page.click(`.mode-card:has-text("${mode === 'trial' ? 'Time Trial' : 'Grand Prix'}")`)
+  // Environment + sliders (target by label: a cup adds sliders of its own).
   await page.click(`.env-chip:has-text("${env}")`)
-  const sliders = page.locator('.slider-line input')
-  await sliders.nth(0).fill(String(lap))
-  await sliders.nth(1).fill(String(obstacles))
+  const slider = (label) => page.locator('.slider-line', { hasText: label }).locator('input')
+  if (isCup) {
+    await slider('Racers per heat').fill(String(heat))
+    await slider('Advance per heat').fill(String(advance))
+  }
+  await slider('Average lap').fill(String(lap))
+  await slider('Obstacles').fill(String(obstacles))
 
-  await page.click('text=Generate & Play')
-  await page.waitForSelector('text=Start the race!', { timeout: 15000 })
-  await page.waitForTimeout(2500) // linger on the lineup card
-  await page.click('text=Start the race!')
-  if (!flag('keep-ui')) await page.keyboard.press('h')
+  if (isCup) {
+    await page.click('text=Start the Cup')
+    await page.waitForSelector('.bracket-card', { timeout: 15000 })
+    await page.waitForTimeout(3000) // hold on the draw
+    if (!flag('keep-ui')) await page.keyboard.press('h')
+    const budget = (lap * 4 + 60) * 1000
+    for (let round = 0; round < 40; round++) {
+      if (await page.locator('.bk-champion').count()) break
+      await page.keyboard.press('Enter') // start the next heat / final
+      await page.waitForSelector('.results-card', { timeout: budget })
+      await page.waitForTimeout(2600) // celebrate on the podium
+      await page.keyboard.press('Enter') // back to the bracket
+      await page.waitForSelector('.bracket-card', { timeout: 15000 })
+      await page.waitForTimeout(2600) // read the standings
+    }
+    await page.waitForTimeout(hold * 1000)
+  } else {
+    await page.click('text=Generate & Play')
+    await page.waitForSelector('text=Start the race!', { timeout: 15000 })
+    await page.waitForTimeout(2500) // linger on the lineup card
+    await page.click('text=Start the race!')
+    if (!flag('keep-ui')) await page.keyboard.press('h')
 
-  // Wait for the podium; budget scales with race length.
-  const budget = (lap * (mode === 'trial' ? racers : 1) * 4 + 60) * 1000
-  await page.waitForSelector('.results-card', { timeout: budget })
-  await page.waitForTimeout(hold * 1000)
+    // Wait for the podium; budget scales with race length.
+    const budget = (lap * (mode === 'trial' ? racers : 1) * 4 + 60) * 1000
+    await page.waitForSelector('.results-card', { timeout: budget })
+    await page.waitForTimeout(hold * 1000)
+  }
 } catch (e) {
   console.error('Recording run failed:', e.message)
 } finally {

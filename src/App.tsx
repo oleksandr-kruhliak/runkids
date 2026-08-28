@@ -11,6 +11,16 @@ import { loadBuiltins, mergeLibraries } from './studio/builtin'
 import Riders, { LeadState } from './track/Riders'
 import Podium, { PodiumEntry } from './track/Podium'
 import PlaySetup, { PlayConfig, RaceMode } from './PlaySetup'
+import Bracket from './Bracket'
+import {
+  Tournament,
+  buildTournament,
+  lockFinal,
+  nextStage,
+  recordStage,
+  stageEntrants,
+  stageLabel,
+} from './tournament'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
@@ -301,8 +311,19 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   }
   const toggleSoundRef = useRef(toggleSound)
   toggleSoundRef.current = toggleSound
+  // Enter drives the tournament forward without touching the mouse.
+  const advanceRef = useRef<() => void>(() => {})
   // Active environment (season) skinning the whole race scene.
   const [env, setEnv] = useState<EnvParams>(() => cloneParams(SUMMER))
+  // Tournament: the bracket, every entrant, and the shared heat course. Heats
+  // all run the same track with the same per-lane obstacles, so times are
+  // comparable across heats; the final gets a longer track of its own.
+  const [tourney, setTourney] = useState<Tournament | null>(null)
+  const [entrants, setEntrants] = useState<PlayConfig['picks']>([])
+  const [bracketOpen, setBracketOpen] = useState(false)
+  const [heatTrack, setHeatTrack] = useState<{ shape: PieceType[]; targetLen: number } | null>(null)
+  const cfgRef = useRef<PlayConfig | null>(null)
+  const recorded = useRef(false)
   // Recording mode: hide every control except the broadcast overlay (H key).
   const [clean, setClean] = useState(false)
   const cleanRef = useRef(clean)
@@ -451,6 +472,15 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     }, 1100)
   }
 
+  // Tournament: fold the finished stage's times into the bracket.
+  useEffect(() => {
+    if (!tourney || !trialDone || recorded.current) return
+    const stage = nextStage(tourney) // the stage we just raced
+    if (stage.kind === 'done') return
+    recorded.current = true
+    setTourney((t) => (t ? recordStage(t, stage, trialTimes) : t))
+  }, [tourney, trialDone, trialTimes])
+
   // Victory fanfare when the podium appears.
   useEffect(() => {
     if (trialActive && trialDone) {
@@ -484,27 +514,133 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
 
   // ---- Quick play: generate a course from the setup screen and auto-run ----
   const handleGenerate = (config: PlayConfig) => {
+    initAudio() // this runs from a click, so the browser lets audio start
+    setCrowd(0.35)
+    cfgRef.current = config
+    setEnv(cloneParams(config.env))
+    setMode('play')
+    setResetSignal((n) => n + 1)
+    setFollow(false)
+    setFitSignal((n) => n + 1)
+
+    if (config.raceMode === 'tournament') {
+      // One shared course for every heat, sized for the biggest heat.
+      const targetLen = Math.max(20, config.avgTime * BASE_SPEED)
+      const t = buildTournament(config.picks.length, {
+        heatSize: config.heatSize,
+        advance: config.advance,
+      })
+      setEntrants(config.picks)
+      setTourney(t)
+      // Every heat runs the same course shape (so viewers learn the track) but
+      // draws its own obstacles — otherwise the same lane wins every heat.
+      setHeatTrack({ shape: generateShape(targetLen), targetLen })
+      setTrialMode('together')
+      setIntroOpen(false)
+      setBracketOpen(true) // the draw, then the user starts heat 1
+      return
+    }
+
     const targetLen = Math.max(20, config.avgTime * BASE_SPEED)
     const shape = generateShape(targetLen)
     const laneObstacles = generateLaneObstacles(config.picks.length, targetLen, config.obstaclePct)
-    initAudio() // this runs from a click, so the browser lets audio start
-    setCrowd(0.35)
+    setTourney(null)
     setPicks(config.picks)
     setGenerated({ shape, laneObstacles })
-    setMode('play')
     setTrialMode(config.raceMode)
-    setEnv(cloneParams(config.env))
     // Show the starting-line intro; the race starts from its button.
-    setResetSignal((n) => n + 1)
-    setFollow(false)
     setIntroOpen(true)
-    setFitSignal((n) => n + 1)
+  }
+
+  /** Golden-hour dressing so the final reads as an event. */
+  const finalEnv = (base: EnvParams): EnvParams => {
+    const e = cloneParams(base)
+    if (e.night) {
+      e.clouds = Math.min(20, e.clouds + 3)
+      return e
+    }
+    e.sunElev = 12
+    e.clouds = Math.max(e.clouds, 8)
+    return e
+  }
+
+  /** Load the next heat (or the final) and drop straight into the countdown. */
+  const startStage = () => {
+    const t = tourney
+    const cfg = cfgRef.current
+    if (!t || !cfg || !heatTrack) return
+    const stage = nextStage(t)
+    if (stage.kind === 'done') return
+
+    let active = t
+    const heatIdx = stage.kind === 'heat' ? stageEntrants(t, stage) : []
+    let course = {
+      shape: heatTrack.shape,
+      laneObstacles: generateLaneObstacles(
+        Math.max(1, heatIdx.length),
+        heatTrack.targetLen,
+        cfg.obstaclePct,
+      ),
+    }
+    let useEnv = cfg.env
+
+    if (stage.kind === 'final') {
+      active = lockFinal(t)
+      setTourney(active)
+      // A longer course of its own, at sunset.
+      const targetLen = Math.max(20, cfg.avgTime * BASE_SPEED * 1.5)
+      const idx = stageEntrants(active, stage)
+      course = {
+        shape: generateShape(targetLen),
+        laneObstacles: generateLaneObstacles(idx.length, targetLen, cfg.obstaclePct),
+      }
+      useEnv = finalEnv(cfg.env)
+    }
+
+    const idx = stageEntrants(active, stage)
+    const stagePicks = idx.map((i) => entrants[i]).filter(Boolean)
+    setEnv(cloneParams(useEnv))
+    setPicks(stagePicks)
+    setGenerated({
+      shape: course.shape,
+      laneObstacles: course.laneObstacles.slice(0, stagePicks.length),
+    })
+    recorded.current = false
+    setBracketOpen(false)
+    startTrial(stagePicks.length, 'together')
+  }
+
+  // Wire Enter to whatever the cup needs next.
+  advanceRef.current = () => {
+    if (!tourney) return
+    if (bracketOpen) {
+      if (nextStage(tourney).kind !== 'done') startStage()
+    } else if (trialDone) {
+      setBracketOpen(true)
+    }
+  }
+
+  /** Start the cup over with the same entrants and a fresh course. */
+  const restartCup = () => {
+    const cfg = cfgRef.current
+    if (!cfg) return
+    const targetLen = Math.max(20, cfg.avgTime * BASE_SPEED)
+    const t = buildTournament(entrants.length, { heatSize: cfg.heatSize, advance: cfg.advance })
+    clearTimers()
+    setTrialActive(false)
+    setTrialDone(false)
+    setTourney(t)
+    setHeatTrack({ shape: generateShape(targetLen), targetLen })
+    setEnv(cloneParams(cfg.env))
+    setBracketOpen(true)
   }
 
   const backToSetup = () => {
     setIntroOpen(false)
     setClean(false)
     setCrowd(0, 0.5)
+    setBracketOpen(false)
+    setTourney(null)
     exitTrial()
     setGenerated(null)
     setMode('setup')
@@ -537,6 +673,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         toggleRecordingRef.current()
       } else if (e.key === 'm' || e.key === 'M') {
         toggleSoundRef.current()
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        advanceRef.current()
       }
     }
     window.addEventListener('keydown', onKey)
@@ -840,11 +979,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         </Canvas>
 
         {/* Time-trial: big kid-friendly running timer */}
-        {trialActive && !trialDone && !introOpen && (
+        {trialActive && !trialDone && !introOpen && !bracketOpen && (
           <div className="trial-hud">
             <button className="trial-close" onClick={exitTrial} aria-label="Stop time trial">
               ✕
             </button>
+            {tourney && (
+              <div className="trial-stage">🏆 {stageLabel(tourney, nextStage(tourney))}</div>
+            )}
             {trialMode === 'together' ? (
               countdown !== null ? (
                 <>
@@ -905,7 +1047,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         )}
 
         {/* Broadcast overlay: live standings ladder */}
-        {trialActive && !trialDone && !introOpen && ladder.length > 0 && (
+        {trialActive && !trialDone && !introOpen && !bracketOpen && ladder.length > 0 && (
           <div className="ladder">
             <div className="ladder-title">{trialMode === 'together' ? '🏁 Positions' : '⏱ Times'}</div>
             {ladder.map((row, i) => (
@@ -930,6 +1072,17 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               </div>
             ))}
           </div>
+        )}
+
+        {/* Tournament bracket / champion screen between races */}
+        {playing && bracketOpen && tourney && (
+          <Bracket
+            tournament={tourney}
+            racers={entrants.map((e) => ({ name: e.name, color: e.colors.body }))}
+            onStart={startStage}
+            onRestart={restartCup}
+            onExit={backToSetup}
+          />
         )}
 
         {/* Broadcast overlay: pre-race intro / lineup card */}
@@ -977,7 +1130,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         )}
 
         {/* Time-trial: results podium */}
-        {trialDone && ranking.length > 0 && (
+        {trialDone && ranking.length > 0 && !bracketOpen && (
           <div className="results-overlay">
             <Confetti />
             <div className="results-card">
@@ -996,10 +1149,18 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 ))}
               </ol>
               <div className="results-actions">
-                <button className="results-btn again" onClick={() => startTrial()}>🔁 Race again</button>
-                <button className="results-btn" onClick={playing ? backToSetup : exitTrial}>
-                  {playing ? '⚙ New setup' : '✕ Done'}
-                </button>
+                {tourney ? (
+                  <button className="results-btn again" onClick={() => setBracketOpen(true)}>
+                    ▶ Continue
+                  </button>
+                ) : (
+                  <>
+                    <button className="results-btn again" onClick={() => startTrial()}>🔁 Race again</button>
+                    <button className="results-btn" onClick={playing ? backToSetup : exitTrial}>
+                      {playing ? '⚙ New setup' : '✕ Done'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1023,7 +1184,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         )}
 
         {playing && toastMsg && <div className="clean-toast">{toastMsg}</div>}
-        {playing && !menuOpen && !trialDone && !introOpen && (
+        {playing && !menuOpen && !trialDone && !introOpen && !bracketOpen && (
           <div className="play-corner">
             {recSupported && (
               <button

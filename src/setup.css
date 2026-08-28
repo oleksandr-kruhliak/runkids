@@ -289,3 +289,24 @@
   color: #7c4dff;
   cursor: pointer;
 }
+
+/* Tournament options */
+.mode-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.tourney-opts {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #f7fafd;
+  border: 1.5px solid #dde5ee;
+}
+
+.tourney-opts .slider-line {
+  margin-bottom: 4px;
+}
+
+.tourney-opts .setup-note {
+  margin: 6px 0 0;
+}

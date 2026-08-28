@@ -3,10 +3,14 @@ import { ANIMAL_PALETTES, AnimalColors } from './track/Animal'
 import { AnimalDesign } from './studio/model'
 import { ALL_PRESETS, EnvParams, PARTICLE_META, ParticleKind, cloneParams } from './env/model'
 import { loadEnvLibrary } from './env/library'
+import { MIN_ENTRANTS } from './tournament'
 import './setup.css'
 
 const DEFAULT_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
 const MAX_RACERS = 8
+// A tournament only runs one heat at a time, so the field can be much bigger
+// than the lane limit — more entrants just means more heats.
+const MAX_ENTRANTS = 16
 const MIN_RACERS = 2
 
 export interface Pick {
@@ -14,7 +18,7 @@ export interface Pick {
   colors: AnimalColors
   name: string
 }
-export type RaceMode = 'together' | 'solo'
+export type RaceMode = 'together' | 'solo' | 'tournament'
 
 export interface PlayConfig {
   picks: Pick[]
@@ -22,6 +26,9 @@ export interface PlayConfig {
   obstaclePct: number
   raceMode: RaceMode
   env: EnvParams
+  /** Tournament only: racers per heat and how many advance. */
+  heatSize: number
+  advance: number
 }
 
 interface Option extends Pick {
@@ -68,21 +75,40 @@ export default function PlaySetup({
   const [avgTime, setAvgTime] = useState(8)
   const [obstaclePct, setObstaclePct] = useState(40)
   const [raceMode, setRaceMode] = useState<RaceMode>('together')
+  const [heatSize, setHeatSize] = useState(3)
+  const [advance, setAdvance] = useState(1)
+  const pickMode = (m: RaceMode) => {
+    setRaceMode(m)
+    // Leaving a tournament: drop back to the lane limit.
+    if (m !== 'tournament') setSelected((sel) => sel.slice(0, MAX_RACERS))
+  }
   // Environment: built-in seasons plus anything saved in the Env Studio.
   const savedEnvs = useMemo(() => loadEnvLibrary(), [])
   const [envKey, setEnvKey] = useState('preset:summer')
   // Weather: 'auto' keeps the world's own sky, 'random' rolls one at generate.
   const [weather, setWeather] = useState<'auto' | 'random' | ParticleKind>('auto')
 
+  const maxPick = raceMode === 'tournament' ? MAX_ENTRANTS : MAX_RACERS
   const toggle = (key: string) =>
     setSelected((sel) => {
       if (sel.includes(key)) return sel.filter((k) => k !== key)
-      if (sel.length >= MAX_RACERS) return sel
+      if (sel.length >= maxPick) return sel
       return [...sel, key]
     })
 
   const order = (key: string) => selected.indexOf(key)
-  const canPlay = selected.length >= MIN_RACERS
+  const minNeeded = raceMode === 'tournament' ? MIN_ENTRANTS : MIN_RACERS
+  const canPlay = selected.length >= minNeeded
+  // How the field splits up, previewed live under the tournament controls.
+  const heatPreview = useMemo(() => {
+    if (raceMode !== 'tournament' || selected.length < MIN_ENTRANTS) return null
+    const heats = Math.max(2, Math.ceil(selected.length / heatSize))
+    const base = Math.floor(selected.length / heats)
+    const extra = selected.length % heats
+    const sizes = Array.from({ length: heats }, (_, i) => base + (i < extra ? 1 : 0))
+    const adv = Math.min(advance, heatSize - 1)
+    return { heats, sizes, finalists: Math.min(8, heats * adv) }
+  }, [raceMode, selected.length, heatSize, advance])
 
   const generate = () => {
     const byKey = new Map(options.map((o) => [o.key, o]))
@@ -102,7 +128,7 @@ export default function PlaySetup({
       env.particles = weather
       env.particleDensity = weather === 'none' ? 0 : env.particleDensity > 0 ? env.particleDensity : 55
     }
-    onGenerate({ picks, avgTime, obstaclePct, raceMode, env })
+    onGenerate({ picks, avgTime, obstaclePct, raceMode, env, heatSize, advance })
   }
 
   return (
@@ -119,7 +145,9 @@ export default function PlaySetup({
         <section className="setup-section">
           <div className="setup-label-row">
             <span className="setup-label">Racers</span>
-            <span className="setup-count">{selected.length} selected</span>
+            <span className="setup-count">
+              {selected.length} / {maxPick} selected
+            </span>
           </div>
           <div className="racer-grid">
             {options.map((o) => {
@@ -140,7 +168,11 @@ export default function PlaySetup({
               )
             })}
           </div>
-          {!canPlay && <p className="setup-hint">Pick at least {MIN_RACERS} racers.</p>}
+          {!canPlay && (
+            <p className="setup-hint">
+              Pick at least {minNeeded} racers{raceMode === 'tournament' ? ' for a tournament' : ''}.
+            </p>
+          )}
         </section>
 
         <section className="setup-section">
@@ -150,7 +182,7 @@ export default function PlaySetup({
           <div className="mode-row">
             <button
               className={`mode-card ${raceMode === 'together' ? 'on' : ''}`}
-              onClick={() => setRaceMode('together')}
+              onClick={() => pickMode('together')}
             >
               <span className="mode-icon">🏆</span>
               <span className="mode-name">Grand Prix</span>
@@ -158,13 +190,60 @@ export default function PlaySetup({
             </button>
             <button
               className={`mode-card ${raceMode === 'solo' ? 'on' : ''}`}
-              onClick={() => setRaceMode('solo')}
+              onClick={() => pickMode('solo')}
             >
               <span className="mode-icon">⏱</span>
               <span className="mode-name">Time Trial</span>
               <span className="mode-desc">One racer at a time</span>
             </button>
+            <button
+              className={`mode-card ${raceMode === 'tournament' ? 'on' : ''}`}
+              onClick={() => pickMode('tournament')}
+            >
+              <span className="mode-icon">🏆</span>
+              <span className="mode-name">Tournament</span>
+              <span className="mode-desc">Heats, then a final</span>
+            </button>
           </div>
+
+          {raceMode === 'tournament' && (
+            <div className="tourney-opts">
+              <label className="slider-line">
+                <span className="slider-name">Racers per heat</span>
+                <input
+                  type="range"
+                  min={2}
+                  max={4}
+                  step={1}
+                  value={heatSize}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value)
+                    setHeatSize(v)
+                    setAdvance((a) => Math.min(a, v - 1))
+                  }}
+                />
+                <span className="slider-out">{heatSize}</span>
+              </label>
+              <label className="slider-line">
+                <span className="slider-name">Advance per heat</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={Math.max(1, heatSize - 1)}
+                  step={1}
+                  value={advance}
+                  onChange={(e) => setAdvance(parseInt(e.target.value))}
+                />
+                <span className="slider-out">{advance}</span>
+              </label>
+              {heatPreview && (
+                <p className="setup-note">
+                  {heatPreview.heats} heats ({heatPreview.sizes.join(' + ')}) →{' '}
+                  <b>{heatPreview.finalists}-racer final</b> on a longer track at sunset.
+                </p>
+              )}
+            </div>
+          )}
         </section>
 
         <section className="setup-section">
@@ -261,7 +340,7 @@ export default function PlaySetup({
         </section>
 
         <button className="setup-go" onClick={generate} disabled={!canPlay}>
-          🎬 Generate &amp; Play
+          {raceMode === 'tournament' ? '🏆 Start the Cup' : '🎬 Generate & Play'}
         </button>
         <button className="setup-advanced" onClick={onAdvanced}>
           Advanced track builder →
