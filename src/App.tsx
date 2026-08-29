@@ -34,6 +34,7 @@ import {
   scoreRace,
 } from './show'
 import { LineupCard, OutroCard, StandingsCard, TitleCard } from './ShowCards'
+import TrackMap from './TrackMap'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
@@ -1303,6 +1304,18 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               </>
             )}
           </div>
+        )}
+
+        {/* Broadcast overlay: top-down course map with a dot per animal */}
+        {trialActive && !trialDone && !introOpen && !bracketOpen && track.length > 0 && (
+          <TrackMap
+            track={track}
+            colors={racers.map((r) => r.colors.body)}
+            names={racers.map((r) => r.name)}
+            distancesRef={distancesRef}
+            count={racerCount}
+            times={trialTimes}
+          />
         )}
 
         {/* Broadcast overlay: live standings ladder */}

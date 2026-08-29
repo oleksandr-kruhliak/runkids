@@ -1765,3 +1765,81 @@ body {
   font-weight: 900;
   color: #16233a;
 }
+
+/* ---- Broadcast overlay: top-down course map --------------------------- */
+.track-map {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: min(236px, 40vw);
+  padding: 8px 10px 6px;
+  border-radius: 16px;
+  background: rgba(18, 22, 34, 0.78);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 26px rgba(10, 15, 30, 0.35);
+  z-index: 6;
+}
+
+.tm-title {
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #cfd8ea;
+  margin: 0 2px 4px;
+}
+
+.tm-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.tm-road {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tm-lane {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.42);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 4 5;
+}
+
+.tm-start {
+  fill: none;
+  stroke: #9fb0cc;
+  stroke-width: 2;
+}
+
+.tm-finish {
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+/* One dot per animal, moved every frame from the sim's distances. */
+.tm-dot .tm-ring {
+  fill: rgba(12, 16, 26, 0.9);
+}
+
+/* The leader wears a halo, so the map reads at a glance. */
+.tm-dot .tm-halo {
+  fill: none;
+  stroke: #ffd45e;
+  stroke-width: 2;
+  opacity: 0;
+}
+
+.tm-dot[data-lead='1'] .tm-halo {
+  opacity: 1;
+}
+
+.tm-dot.done .tm-ring {
+  fill: #ffd45e;
+}
