@@ -322,3 +322,36 @@
 .racer-card .avatar {
   margin-bottom: 2px;
 }
+
+/* "Generate video": films a whole episode hands-free */
+.video-block {
+  margin-top: 12px;
+  padding: 12px 12px 4px;
+  border-radius: 16px;
+  background: #f4f1ff;
+  border: 1px solid #e2dbfb;
+}
+
+.setup-video {
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 13px;
+  font-size: 16px;
+  font-weight: 900;
+  color: #fff;
+  background: linear-gradient(#8a6bf0, #6d47e0);
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(109, 71, 224, 0.3);
+}
+
+.setup-video:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: default;
+}
+
+.video-note {
+  margin: 8px 2px;
+  line-height: 1.45;
+}

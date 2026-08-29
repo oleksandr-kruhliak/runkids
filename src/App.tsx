@@ -20,7 +20,20 @@ import {
   recordStage,
   stageEntrants,
   stageLabel,
+  standings,
 } from './tournament'
+import {
+  BEAT_MS,
+  CHAMPION_MS,
+  SeriesRow,
+  ShowBeat,
+  ShowState,
+  emptySeries,
+  raceLabel,
+  rankSeries,
+  scoreRace,
+} from './show'
+import { LineupCard, OutroCard, StandingsCard, TitleCard } from './ShowCards'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
@@ -324,6 +337,16 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const [heatTrack, setHeatTrack] = useState<{ shape: PieceType[]; targetLen: number } | null>(null)
   const cfgRef = useRef<PlayConfig | null>(null)
   const recorded = useRef(false)
+  const tourneyRef = useRef(tourney)
+  tourneyRef.current = tourney
+  // Auto-show ("Generate video"): the app hosts a whole episode by itself —
+  // title card, line-up, race, results, standings, next race — and stops the
+  // recording when the credits roll. `beat` is where we are in that sequence.
+  const [show, setShow] = useState<ShowState | null>(null)
+  const [series, setSeries] = useState<SeriesRow[]>([])
+  const showRef = useRef<ShowState | null>(null)
+  showRef.current = show
+  const showTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Recording mode: hide every control except the broadcast overlay (H key).
   const [clean, setClean] = useState(false)
   const cleanRef = useRef(clean)
@@ -340,7 +363,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   const recSupported = useMemo(() => isRecordingSupported(), [])
   const [recording, setRecording] = useState(false)
   const stopRecRef = useRef<(() => void) | null>(null)
-  const startRecording = async () => {
+  /** `quiet` suppresses the toasts, which would otherwise film themselves. */
+  const startRecording = async (quiet = false) => {
     try {
       const stop = await startTabRecording((blob) => {
         downloadRecording(blob)
@@ -351,9 +375,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       stopRecRef.current = stop
       setRecording(true)
       setClean(true) // hide controls so they stay out of the video
-      showToast('⏺ Recording — press R to stop')
+      if (!quiet) showToast('⏺ Recording — press R to stop')
     } catch {
-      showToast('Recording was cancelled')
+      if (!quiet) showToast('Recording was cancelled')
     }
   }
   const toggleRecording = () => {
@@ -523,6 +547,37 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setFollow(false)
     setFitSignal((n) => n + 1)
 
+    // "Generate video": film an episode hands-free. The capture prompt has to
+    // open from this click, and the show only starts once the user has picked
+    // a tab — otherwise the title card would play out behind the picker.
+    const auto = config.autoShow
+    setShow(null)
+    if (auto) {
+      setClean(true) // no buttons in the recording
+      setDirector(true) // broadcast camera cuts throughout
+      setSeries(emptySeries(config.picks.length))
+      const first: ShowState = {
+        beat: 'title',
+        race: 0,
+        total: config.raceMode === 'tournament' ? 1 : Math.max(1, config.episodeRaces),
+        tournament: config.raceMode === 'tournament',
+      }
+      // Wait for the capture prompt to be answered, so the title card isn't
+      // playing out behind the picker — but never wait on it forever.
+      let begun = false
+      const begin = () => {
+        if (begun) return
+        begun = true
+        setShow(first)
+      }
+      if (recSupported) {
+        startRecording(true).then(begin)
+        setTimeout(begin, 45_000)
+      } else {
+        begin()
+      }
+    }
+
     if (config.raceMode === 'tournament') {
       // One shared course for every heat, sized for the biggest heat.
       const targetLen = Math.max(20, config.avgTime * BASE_SPEED)
@@ -537,7 +592,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       setHeatTrack({ shape: generateShape(targetLen), targetLen })
       setTrialMode('together')
       setIntroOpen(false)
-      setBracketOpen(true) // the draw, then the user starts heat 1
+      // The show opens the draw itself, right after its title card.
+      setBracketOpen(!auto)
       return
     }
 
@@ -548,8 +604,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setPicks(config.picks)
     setGenerated({ shape, laneObstacles })
     setTrialMode(config.raceMode)
-    // Show the starting-line intro; the race starts from its button.
-    setIntroOpen(true)
+    // Show the starting-line intro; the race starts from its button. The auto
+    // show runs its own line-up card instead.
+    setIntroOpen(!auto)
   }
 
   /** Golden-hour dressing so the final reads as an event. */
@@ -635,7 +692,131 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setBracketOpen(true)
   }
 
+  // ---- Auto-show: the "Generate video" director -------------------------
+  //
+  // A show is a sequence of beats. Every beat but `race` holds for a fixed
+  // number of seconds (BEAT_MS) and then steps on; `race` ends when the
+  // racers cross the line. A tournament reuses the bracket screen as its
+  // standings beat, so the episode reads draw → heat → bracket → heat → …
+  // → final → champion; a grand-prix episode runs a points series instead.
+
+  /** Fresh course for one race of an episode; the last one runs longer. */
+  const showCourse = (cfg: PlayConfig, last: boolean) => {
+    const targetLen = Math.max(20, cfg.avgTime * BASE_SPEED * (last ? 1.4 : 1))
+    return {
+      shape: generateShape(targetLen),
+      laneObstacles: generateLaneObstacles(cfg.picks.length, targetLen, cfg.obstaclePct),
+    }
+  }
+
+  /** Load race `i` of the episode and drop straight into the countdown. */
+  const showRunRace = (i: number) => {
+    const cfg = cfgRef.current
+    if (!cfg) return
+    const total = Math.max(1, cfg.episodeRaces)
+    const last = total > 1 && i === total - 1
+    setEnv(cloneParams(last ? finalEnv(cfg.env) : cfg.env)) // sunset for the decider
+    setGenerated(showCourse(cfg, last))
+    startTrial(cfg.picks.length, cfg.raceMode === 'solo' ? 'solo' : 'together')
+  }
+
+  /** Roll the credits: stop the capture and hand the controls back. */
+  const endShow = () => {
+    if (showTimer.current) clearTimeout(showTimer.current)
+    showTimer.current = null
+    setShow(null)
+    if (stopRecRef.current) stopRecRef.current()
+    setClean(false)
+  }
+  const endShowRef = useRef(endShow)
+  endShowRef.current = endShow
+
+  /** Advance to the next beat, running whatever that beat kicks off. */
+  const stepShow = () => {
+    const s = showRef.current
+    if (!s) return
+    const go = (beat: ShowBeat, race = s.race) => setShow({ ...s, beat, race })
+
+    if (s.tournament) {
+      switch (s.beat) {
+        case 'title':
+          setBracketOpen(true)
+          return go('standings')
+        case 'standings': {
+          const t = tourneyRef.current
+          if (!t || nextStage(t).kind === 'done') return go('outro')
+          startStage() // closes the bracket and starts the countdown
+          return go('race')
+        }
+        case 'race':
+          return go('result')
+        case 'result':
+          setBracketOpen(true) // the bracket, now with this heat filled in
+          return go('standings')
+        default:
+          return endShow()
+      }
+    }
+
+    switch (s.beat) {
+      case 'title':
+        return go('lineup')
+      case 'lineup':
+        showRunRace(s.race)
+        return go('race')
+      case 'race':
+        setSeries((rows) => scoreRace(rows, ranking))
+        return go('result')
+      case 'result':
+        return go('standings')
+      case 'standings':
+        if (s.race + 1 >= s.total) return go('outro')
+        return go('lineup', s.race + 1)
+      default:
+        return endShow()
+    }
+  }
+  const stepShowRef = useRef(stepShow)
+  stepShowRef.current = stepShow
+
+  /** How long the current card holds. The payoff screens hold longest. */
+  const beatMs = (s: ShowState): number => {
+    if (s.beat === 'race') return 0
+    if (s.beat === 'standings') {
+      const finale = s.tournament
+        ? !tourneyRef.current || nextStage(tourneyRef.current).kind === 'done'
+        : s.race + 1 >= s.total
+      if (finale) return CHAMPION_MS
+    }
+    return BEAT_MS[s.beat]
+  }
+
+  // Card beats are on a timer...
+  useEffect(() => {
+    if (!show || show.beat === 'race') return
+    const id = setTimeout(() => stepShowRef.current(), beatMs(show))
+    showTimer.current = id
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show])
+
+  // A sting on every card so the cuts read on the audio track too.
+  useEffect(() => {
+    if (!show) return
+    if (show.beat === 'title' || show.beat === 'outro') sfx('fanfare', 0.7)
+    else if (show.beat === 'lineup' || show.beat === 'standings') sfx('chime', 0.9)
+  }, [show])
+
+  // ...and the race beat ends when the racers do.
+  useEffect(() => {
+    if (!show || show.beat !== 'race' || !trialDone) return
+    stepShowRef.current()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show, trialDone])
+
   const backToSetup = () => {
+    if (showTimer.current) clearTimeout(showTimer.current)
+    setShow(null)
     setIntroOpen(false)
     setClean(false)
     setCrowd(0, 0.5)
@@ -664,7 +845,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        togglePauseMenu()
+        if (showRef.current) endShowRef.current() // stop filming, hand back control
+        else togglePauseMenu()
       } else if (e.key === 'h' || e.key === 'H') {
         const next = !cleanRef.current
         setClean(next)
@@ -793,7 +975,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   // While the intro card is up, frame the starting line so the racers are in
   // shot behind the card.
   const introFocus = useMemo<FocusSpec | null>(() => {
-    if (!introOpen || track.length === 0) return null
+    // The show's title and line-up cards get the same starting-line framing.
+    const framed = introOpen || (!!show && (show.beat === 'title' || show.beat === 'lineup'))
+    if (!framed || track.length === 0) return null
     const f = sampleCenter(track.center, 0)
     return {
       pos: f.pos.clone(),
@@ -802,7 +986,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
       elev: 0.34,
       lookY: 0.6,
     }
-  }, [introOpen, track])
+  }, [introOpen, show, track])
 
   // Frame the podium head-on once the results are in.
   const podiumFocus = useMemo<FocusSpec | null>(
@@ -813,12 +997,87 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     [trialDone, podiumSpot],
   )
 
+  // Every tournament entrant with its portrait, for the bracket and the cards.
+  const entrantRacers = useMemo(
+    () =>
+      entrants.map((e) => ({
+        name: e.name,
+        colors: e.colors,
+        design: e.designId ? saved.find((d) => d.id === e.designId) ?? null : null,
+      })),
+    [entrants, saved],
+  )
+
+  // Cup winner, once the final has been raced — the face on the outro card.
+  const championRacer = useMemo(() => {
+    if (!tourney || nextStage(tourney).kind !== 'done') return null
+    const rows = standings(tourney)
+    return rows[0] ? entrantRacers[rows[0].entrant] ?? null : null
+  }, [tourney, entrantRacers])
+
   // The quick-play setup screen is the landing view.
   if (mode === 'setup') {
     return <PlaySetup saved={saved} onGenerate={handleGenerate} onAdvanced={() => setMode('build')} />
   }
 
   const playing = mode === 'play'
+
+  // The auto-show's full-screen cards. 'race' has no card, and 'result' is
+  // covered by the podium overlay the race already brings up; a tournament's
+  // 'standings' beat is the bracket screen.
+  const showCard = (() => {
+    if (!playing || !show) return null
+    const world = cfgRef.current?.envName ?? 'Runkids'
+    const table = rankSeries(series)
+    const leader = table[0] ? racers[table[0].lane] ?? null : null
+    switch (show.beat) {
+      case 'title':
+        return (
+          <TitleCard
+            title={show.tournament ? `The ${world} Cup` : `${world} Race Day`}
+            subtitle={
+              show.tournament
+                ? `${entrantRacers.length} racers · heats, then one big final`
+                : `${racers.length} racers · ${show.total} race${show.total > 1 ? 's' : ''}`
+            }
+            racers={show.tournament ? entrantRacers : racers}
+          />
+        )
+      case 'lineup':
+        return (
+          <LineupCard
+            kicker={raceLabel(show.race, show.total)}
+            title={show.total > 1 && show.race + 1 === show.total ? '🏁 The decider!' : '🏁 On your marks!'}
+            racers={racers}
+            note={
+              show.total > 1 && show.race > 0
+                ? 'Points so far are on the board — can anyone catch up? 👀'
+                : undefined
+            }
+          />
+        )
+      case 'standings':
+        if (show.tournament) return null // the bracket screen is the standings
+        return (
+          <StandingsCard
+            kicker={`After ${show.race + 1} of ${show.total} races`}
+            title={show.race + 1 >= show.total ? '🏆 Final standings' : '📊 Championship'}
+            rows={table}
+            racers={racers}
+          />
+        )
+      case 'outro':
+        return (
+          <OutroCard
+            title={show.tournament ? 'What a cup!' : 'What a race day!'}
+            champion={show.tournament ? championRacer : leader}
+          />
+        )
+      default:
+        return null
+    }
+  })()
+
   const laneDesignsOut = racers.map((r) => r.design)
   const laneColorsOut = racers.map((r) => r.colors)
 
@@ -1078,16 +1337,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         {playing && bracketOpen && tourney && (
           <Bracket
             tournament={tourney}
-            racers={entrants.map((e) => ({
-              name: e.name,
-              colors: e.colors,
-              design: e.designId ? saved.find((d) => d.id === e.designId) ?? null : null,
-            }))}
+            racers={entrantRacers}
             onStart={startStage}
             onRestart={restartCup}
             onExit={backToSetup}
           />
         )}
+
+        {showCard}
 
         {/* Broadcast overlay: pre-race intro / lineup card */}
         {playing && introOpen && (
@@ -1133,8 +1390,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
           </div>
         )}
 
-        {/* Time-trial: results podium */}
-        {trialDone && ranking.length > 0 && !bracketOpen && (
+        {/* Time-trial: results podium. In a show it belongs to the 'result'
+            beat only — the cards take over from there. */}
+        {trialDone && ranking.length > 0 && !bracketOpen && (!show || show.beat === 'result') && (
           <div className="results-overlay">
             <Confetti />
             <div className="results-card">

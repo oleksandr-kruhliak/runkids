@@ -30,6 +30,12 @@ export interface PlayConfig {
   /** Tournament only: racers per heat and how many advance. */
   heatSize: number
   advance: number
+  /** Label of the chosen world, for the episode's title card. */
+  envName: string
+  /** Run the whole episode hands-free (title cards, races, standings). */
+  autoShow: boolean
+  /** Races in a non-tournament episode; a tournament paces itself. */
+  episodeRaces: number
 }
 
 interface Option extends Pick {
@@ -91,6 +97,8 @@ export default function PlaySetup({
   const [envKey, setEnvKey] = useState('preset:summer')
   // Weather: 'auto' keeps the world's own sky, 'random' rolls one at generate.
   const [weather, setWeather] = useState<'auto' | 'random' | ParticleKind>('auto')
+  // Auto-show: how many races make up one recorded episode.
+  const [episodeRaces, setEpisodeRaces] = useState(3)
 
   const maxPick = raceMode === 'tournament' ? MAX_ENTRANTS : MAX_RACERS
   const toggle = (key: string) =>
@@ -114,7 +122,7 @@ export default function PlaySetup({
     return { heats, sizes, finalists: Math.min(8, heats * adv) }
   }, [raceMode, selected.length, heatSize, advance])
 
-  const generate = () => {
+  const generate = (autoShow = false) => {
     const byKey = new Map(options.map((o) => [o.key, o]))
     const picks: Pick[] = selected
       .map((k) => byKey.get(k))
@@ -123,6 +131,7 @@ export default function PlaySetup({
     const preset = ALL_PRESETS.find((pr) => `preset:${pr.key}` === envKey)
     const saved = savedEnvs.find((d) => d.id === envKey)
     const env = cloneParams(saved?.params ?? preset?.params ?? ALL_PRESETS[0].params)
+    const envName = saved?.name ?? preset?.label ?? ALL_PRESETS[0].label
     // Apply the weather choice over the world's default.
     if (weather === 'random') {
       const options: ParticleKind[] = ['none', 'snow', 'rain', 'storm', 'leaves', 'petals', 'sprinkles']
@@ -132,7 +141,18 @@ export default function PlaySetup({
       env.particles = weather
       env.particleDensity = weather === 'none' ? 0 : env.particleDensity > 0 ? env.particleDensity : 55
     }
-    onGenerate({ picks, avgTime, obstaclePct, raceMode, env, heatSize, advance })
+    onGenerate({
+      picks,
+      avgTime,
+      obstaclePct,
+      raceMode,
+      env,
+      heatSize,
+      advance,
+      envName,
+      autoShow,
+      episodeRaces,
+    })
   }
 
   return (
@@ -343,9 +363,34 @@ export default function PlaySetup({
           <p className="setup-note">Each racer gets its own random obstacles.</p>
         </section>
 
-        <button className="setup-go" onClick={generate} disabled={!canPlay}>
+        <button className="setup-go" onClick={() => generate(false)} disabled={!canPlay}>
           {raceMode === 'tournament' ? '🏆 Start the Cup' : '🎬 Generate & Play'}
         </button>
+
+        <div className="video-block">
+          <button className="setup-video" onClick={() => generate(true)} disabled={!canPlay}>
+            🎥 Generate video
+          </button>
+          <p className="setup-note video-note">
+            {raceMode === 'tournament'
+              ? 'Films the whole cup hands-free: title card → bracket → heat → results → bracket → … → the final and the champion.'
+              : `Films a ${episodeRaces}-race episode hands-free: title card → line-up → race → results → championship table → next race.`}
+          </p>
+          {raceMode !== 'tournament' && (
+            <label className="slider-line">
+              <span className="slider-name">Races in the episode</span>
+              <input
+                type="range"
+                min={1}
+                max={6}
+                step={1}
+                value={episodeRaces}
+                onChange={(e) => setEpisodeRaces(parseInt(e.target.value))}
+              />
+              <span className="slider-out">{episodeRaces}</span>
+            </label>
+          )}
+        </div>
         <button className="setup-advanced" onClick={onAdvanced}>
           Advanced track builder →
         </button>
