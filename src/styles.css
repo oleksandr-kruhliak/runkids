@@ -1146,158 +1146,260 @@ body {
 .bracket-card {
   width: min(760px, 100%);
   margin: auto;
-  background: linear-gradient(165deg, #ffffff, #f3ecff);
+  background: linear-gradient(165deg, #ffffff, #f6f7f9);
   border: 3px solid #7c4dff;
   border-radius: 26px;
   box-shadow: 0 24px 60px rgba(20, 10, 60, 0.45);
-  padding: 20px 22px 18px;
+  padding: 18px 22px 16px;
   text-align: center;
+}
+
+.bracket-card.wide {
+  width: min(1020px, 100%);
+}
+
+.bk-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  margin-bottom: 12px;
 }
 
 .bk-kicker {
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.16em;
   color: #7c4dff;
 }
 
-.bk-title,
-.bk-champion {
-  margin: 4px 0 14px;
-  font-size: 28px;
-  color: #24124f;
+.bk-title {
+  margin: 2px 0 0;
+  font-size: 27px;
+  letter-spacing: -0.01em;
+  color: #1b1b22;
 }
 
-.bk-champion {
-  font-size: 30px;
+/* ---- the tree ---- */
+.bk-tree {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
-.bk-heats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
+.bk-col {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  min-width: 176px;
 }
 
-.bk-heat {
-  border: 2px solid #e0d8f4;
-  border-radius: 16px;
-  padding: 8px;
-  background: #fff;
-  text-align: left;
+.bk-slot {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 132px;
 }
 
-.bk-heat.done {
-  background: #f7f4ff;
+/* Vertical breathing room lives inside the slot, so each slot's centre stays
+   exactly at (i + 0.5) / n — which is what the connector lines are drawn to. */
+.bk-match {
+  width: 100%;
+  padding: 9px 0;
 }
 
-.bk-heat.next {
-  border-color: #ff7a1a;
-  box-shadow: 0 0 0 3px rgba(255, 122, 26, 0.18);
-}
-
-.bk-heat.final {
-  border-style: dashed;
-  border-color: #b9a6e8;
-}
-
-.bk-heat.final.next {
-  border-style: solid;
-  border-color: #ff7a1a;
-}
-
-.bk-heat-head {
+.bk-match-label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #6b5b95;
-  margin-bottom: 6px;
+  letter-spacing: 0.1em;
+  color: #8b8f98;
+  margin: 0 0 5px 2px;
+  padding-bottom: 3px;
+  border-bottom: 2px solid #e6e8ec;
+}
+
+.bk-match.next .bk-match-label {
+  color: #1b1b22;
 }
 
 .bk-next {
-  background: #ff7a1a;
+  background: #22c55e;
   color: #fff;
-  border-radius: 999px;
-  padding: 2px 7px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
 }
 
-.bk-racer {
+/* name plates, styled after a printed bracket */
+.bk-plate {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 6px;
-  border-radius: 9px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #2a2140;
+  gap: 7px;
+  background: #dfe1e5;
+  height: 30px;
+  padding-right: 9px;
+  margin-bottom: 3px;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #1b1b22;
+  overflow: hidden;
 }
 
-.bk-racer.adv {
-  background: #e6f8ec;
+.bk-bar {
+  width: 7px;
+  align-self: stretch;
+  background: #1b1b22;
+  flex: none;
 }
 
-.bk-racer.slot {
-  opacity: 0.45;
-  font-style: italic;
+.bk-plate.adv .bk-bar,
+.bk-plate.win .bk-bar {
+  background: #22c55e;
 }
 
-.bk-racer .lane-dot {
-  width: 11px;
-  height: 11px;
+.bk-plate.adv {
+  background: #e8f6ec;
+}
+
+.bk-plate.win {
+  background: #dcf5e4;
+}
+
+.bk-plate.out {
+  background: #ebedf0;
+  color: #9aa0a8;
+}
+
+.bk-plate.out .bk-bar {
+  background: #b6bcc4;
+}
+
+.bk-plate.tbd {
+  background: #eef0f3;
+  color: #b0b6be;
+}
+
+.bk-plate.tbd .bk-bar {
+  background: #d3d7dd;
+}
+
+.bk-dot {
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--lane-color);
   flex: none;
 }
 
-.bk-name {
+.bk-plate.out .bk-dot {
+  opacity: 0.45;
+}
+
+.bk-pname {
   flex: 1;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.bk-time {
+.bk-ptime {
+  font-size: 11px;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: #6b5b95;
+  color: #5b6068;
 }
 
-.bk-badge {
+.bk-match.next .bk-plate {
+  box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.55);
+}
+
+/* connector lines */
+.bk-spine {
+  flex: 0 0 46px;
+  align-self: stretch;
+  height: auto;
+  stroke: #1b1b22;
+  stroke-width: 2;
+  fill: none;
+}
+
+.bk-spine.short {
+  flex-basis: 34px;
+}
+
+/* champion column */
+.bk-champ-wrap {
+  width: 100%;
+}
+
+.bk-trophy {
+  font-size: 40px;
+  margin-top: 8px;
+  filter: grayscale(1);
+  opacity: 0.35;
+  transition: filter 0.4s, opacity 0.4s, transform 0.4s;
+}
+
+.bk-trophy.won {
+  filter: none;
+  opacity: 1;
+  transform: scale(1.12);
+}
+
+/* Once the cup is decided the tree shares the card with the standings, so it
+   tightens up to keep the whole result on screen in a 16:9 frame. */
+.bracket-card.done .bk-slot {
+  min-height: 106px;
+}
+
+.bracket-card.done .bk-match {
+  padding: 5px 0;
+}
+
+.bracket-card.done .bk-plate {
+  height: 26px;
   font-size: 12px;
 }
 
-.bk-empty {
-  font-size: 12px;
-  color: #8d80ad;
-  padding: 6px;
+.bracket-card.done .bk-title {
+  font-size: 24px;
 }
 
-/* standings table */
+.bracket-card.done .bk-trophy {
+  font-size: 34px;
+  margin-top: 4px;
+}
+
+/* ---- standings table ---- */
 .bk-standings {
-  border: 2px solid #e0d8f4;
-  border-radius: 16px;
+  border: 2px solid #e2e5ea;
+  border-radius: 14px;
   overflow: hidden;
-  margin-bottom: 14px;
+  margin: 10px 0 0;
   background: #fff;
 }
 
 .bk-srow {
   display: grid;
-  grid-template-columns: 42px 1fr 110px 74px;
+  grid-template-columns: 42px 1fr 132px 74px;
   align-items: center;
   gap: 6px;
-  padding: 7px 10px;
-  font-size: 14px;
+  padding: 4px 10px;
+  font-size: 12.5px;
   font-weight: 700;
   color: #2a2140;
-  border-bottom: 1px solid #f0ebfa;
+  border-bottom: 1px solid #f1f3f6;
 }
 
 .bk-srow:last-child {
@@ -1305,19 +1407,19 @@ body {
 }
 
 .bk-shead {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #8d80ad;
-  background: #f7f4ff;
+  letter-spacing: 0.08em;
+  color: #8b8f98;
+  background: #f6f7f9;
 }
 
 .bk-srow.champion {
-  background: #fff6e0;
+  background: #f0fbf3;
 }
 
 .bk-srow.eliminated {
-  color: #8d80ad;
+  color: #9aa0a8;
 }
 
 .bk-place {
@@ -1333,8 +1435,8 @@ body {
 }
 
 .bk-sname .lane-dot {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--lane-color);
   flex: none;
@@ -1342,30 +1444,38 @@ body {
 
 .bk-stime {
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  color: #6b5b95;
+  font-size: 11px;
+  color: #6b7078;
   text-align: right;
 }
 
 .bk-stime.strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
-  color: #4a2b8c;
+  color: #1b1b22;
 }
 
+/* ---- actions ---- */
 .bk-actions {
   display: flex;
   gap: 10px;
   align-items: center;
+  margin-top: 12px;
+}
+
+/* Never let the card outgrow the frame. */
+.bracket-card {
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
 }
 
 .bk-go {
   flex: 1;
   border: 0;
-  border-radius: 16px;
-  padding: 14px;
+  border-radius: 14px;
+  padding: 13px;
   font: inherit;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 800;
   color: #fff;
   cursor: pointer;
@@ -1387,7 +1497,7 @@ body {
 .bk-note {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #6b5b95;
+  color: #6b7078;
 }
 
 /* heat badge in the live HUD */
