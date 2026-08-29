@@ -44,6 +44,14 @@ interface Option extends Pick {
   design: AnimalDesign | null
 }
 
+/** Lap length readout: seconds up to a minute, then "3m 20s". */
+function fmtLap(secs: number): string {
+  if (secs < 60) return `${secs}s`
+  const m = Math.floor(secs / 60)
+  const r = secs % 60
+  return r === 0 ? `${m}m` : `${m}m ${r}s`
+}
+
 function colorsOf(d: AnimalDesign): AnimalColors {
   const body = d.blocks.find((b) => b.role === 'body') ?? d.blocks[0]
   const c = body?.color ?? '#e8734a'
@@ -341,12 +349,12 @@ export default function PlaySetup({
             <input
               type="range"
               min={3}
-              max={60}
+              max={300}
               step={1}
               value={avgTime}
               onChange={(e) => setAvgTime(parseInt(e.target.value))}
             />
-            <span className="slider-out">{avgTime}s</span>
+            <span className="slider-out">{fmtLap(avgTime)}</span>
           </label>
           <label className="slider-line">
             <span className="slider-name">Obstacles</span>
