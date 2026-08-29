@@ -9,17 +9,18 @@
  */
 export type ShowBeat = 'title' | 'lineup' | 'race' | 'result' | 'standings' | 'outro'
 
-/** How long each card stays on screen (ms). Read-aloud pace, not UI pace. */
+/** How long each card stays on screen (ms). Brisk — the races are the show. */
 export const BEAT_MS: Record<Exclude<ShowBeat, 'race'>, number> = {
-  title: 6000,
-  lineup: 5500,
-  result: 7000,
-  standings: 6500,
-  outro: 7000,
+  title: 4000,
+  lineup: 4000,
+  result: 4000,
+  standings: 4000,
+  // The sign-off is the call to action, so it gets the longest hold.
+  outro: 10000,
 }
 
-/** The champion screen is the payoff — it earns a longer hold. */
-export const CHAMPION_MS = 11000
+/** The last leaderboard of the episode is the payoff — it holds longer. */
+export const CHAMPION_MS = 8000
 
 /** Championship points by finishing place, winner first. */
 export const POINTS = [10, 8, 6, 5, 4, 3, 2, 1]
