@@ -1155,7 +1155,9 @@ body {
 }
 
 .bracket-card.wide {
-  width: min(1020px, 100%);
+  width: fit-content;
+  min-width: min(620px, 100%);
+  max-width: min(1060px, 100%);
 }
 
 .bk-head {
@@ -1182,11 +1184,43 @@ body {
 
 /* ---- the tree ---- */
 .bk-tree {
+  position: relative;
   display: flex;
   align-items: stretch;
+  justify-content: center;
   gap: 0;
-  overflow-x: auto;
   padding-bottom: 4px;
+}
+
+/* Connector lines, drawn over the tree from measured box positions. */
+.bk-links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.bk-links path {
+  fill: none;
+  stroke: #1b1b22;
+  stroke-width: 2;
+}
+
+/* Spacers the connectors run through. */
+.bk-gap {
+  flex: 0 0 46px;
+}
+
+.bk-gap.short {
+  flex: 0 0 34px;
+}
+
+/* The measured group of plates inside a match. */
+.bk-plates {
+  display: flex;
+  flex-direction: column;
 }
 
 .bk-col {
@@ -1293,16 +1327,19 @@ body {
   background: #d3d7dd;
 }
 
-.bk-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--lane-color);
+.bk-plate .avatar {
   flex: none;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.55);
 }
 
-.bk-plate.out .bk-dot {
-  opacity: 0.45;
+.bk-plate.out .avatar {
+  opacity: 0.5;
+}
+
+.bk-sname .avatar {
+  flex: none;
+  border-radius: 5px;
 }
 
 .bk-pname {
@@ -1322,20 +1359,6 @@ body {
 
 .bk-match.next .bk-plate {
   box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.55);
-}
-
-/* connector lines */
-.bk-spine {
-  flex: 0 0 46px;
-  align-self: stretch;
-  height: auto;
-  stroke: #1b1b22;
-  stroke-width: 2;
-  fill: none;
-}
-
-.bk-spine.short {
-  flex-basis: 34px;
 }
 
 /* champion column */

@@ -1,3 +1,7 @@
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import AnimalAvatar from './Avatar'
+import { AnimalDesign } from './studio/model'
+import { AnimalColors } from './track/Animal'
 import {
   Stage,
   Tournament,
@@ -9,7 +13,8 @@ import {
 
 export interface BracketRacer {
   name: string
-  color: string
+  colors: AnimalColors
+  design: AnimalDesign | null
 }
 
 const fmt = (t: number | null) => (t == null ? '' : `${t.toFixed(1)}s`)
@@ -34,9 +39,12 @@ function Plate({
     )
   }
   return (
-    <div className={`bk-plate ${state ?? ''}`} style={{ ['--lane-color' as string]: racer.color }}>
+    <div
+      className={`bk-plate ${state ?? ''}`}
+      style={{ ['--lane-color' as string]: racer.colors.body }}
+    >
       <span className="bk-bar" />
-      <span className="bk-dot" />
+      <AnimalAvatar design={racer.design} colors={racer.colors} size={22} />
       <span className="bk-pname">{racer.name}</span>
       {time != null && <span className="bk-ptime">{fmt(time)}</span>}
     </div>
@@ -68,10 +76,57 @@ export default function Bracket({
   const champion = done ? rows[0] : null
   const heats = tournament.heats
   const n = heats.length
-
-  // Connector geometry: slot i's centre sits at (i + 0.5) / n of the column.
-  const centre = (i: number) => ((i + 0.5) / n) * 100
   const finalSlots = Math.max(finalists.length, n * tournament.advance)
+
+  // Connectors are measured from the laid-out boxes rather than assumed from
+  // the grid, so they stay centred on the plates whatever the labels do.
+  const treeRef = useRef<HTMLDivElement>(null)
+  const heatRefs = useRef<(HTMLDivElement | null)[]>([])
+  const finalRef = useRef<HTMLDivElement>(null)
+  const champRef = useRef<HTMLDivElement>(null)
+  const [paths, setPaths] = useState<string[]>([])
+
+  const measure = useCallback(() => {
+    const root = treeRef.current
+    const fin = finalRef.current
+    const champ = champRef.current
+    if (!root || !fin || !champ) return
+    const base = root.getBoundingClientRect()
+    const rel = (el: Element) => {
+      const b = el.getBoundingClientRect()
+      return {
+        left: b.left - base.left,
+        right: b.right - base.left,
+        cy: b.top - base.top + b.height / 2,
+      }
+    }
+    const sources = heatRefs.current.filter(Boolean).map((el) => rel(el as Element))
+    if (sources.length === 0) return
+    const f = rel(fin)
+    const c = rel(champ)
+    const out: string[] = []
+
+    // heats -> final: stubs, a shared vertical spine, then into the final
+    const midA = (Math.max(...sources.map((s2) => s2.right)) + f.left) / 2
+    for (const s2 of sources) out.push(`M ${s2.right} ${s2.cy} H ${midA}`)
+    const ys = [...sources.map((s2) => s2.cy), f.cy]
+    out.push(`M ${midA} ${Math.min(...ys)} V ${Math.max(...ys)}`)
+    out.push(`M ${midA} ${f.cy} H ${f.left}`)
+
+    // final -> champion, stepping to the champion plate's own centre
+    const midB = (f.right + c.left) / 2
+    out.push(`M ${f.right} ${f.cy} H ${midB} V ${c.cy} H ${c.left}`)
+    setPaths(out)
+  }, [])
+
+  useLayoutEffect(() => {
+    measure()
+    const root = treeRef.current
+    if (!root || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(root)
+    return () => ro.disconnect()
+  }, [measure, tournament, finalSlots])
 
   return (
     <div className="bracket-overlay">
@@ -85,7 +140,13 @@ export default function Bracket({
           </div>
         </div>
 
-        <div className="bk-tree">
+        <div className="bk-tree" ref={treeRef}>
+          <svg className="bk-links" aria-hidden>
+            {paths.map((d, i) => (
+              <path key={i} d={d} />
+            ))}
+          </svg>
+
           {/* Heats */}
           <div className="bk-col">
             {heats.map((h, i) => {
@@ -100,6 +161,12 @@ export default function Bracket({
                       Heat {i + 1}
                       {isNext && <span className="bk-next">NEXT</span>}
                     </div>
+                    <div
+                      className="bk-plates"
+                      ref={(el) => {
+                        heatRefs.current[i] = el
+                      }}
+                    >
                     {ranked.map((r, pos) => (
                       <Plate
                         key={r.e}
@@ -108,20 +175,14 @@ export default function Bracket({
                         state={h.done ? (pos < tournament.advance ? 'adv' : 'out') : undefined}
                       />
                     ))}
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
 
-          {/* Heats -> final connectors */}
-          <svg className="bk-spine" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-            {heats.map((_, i) => (
-              <line key={i} x1="0" y1={centre(i)} x2="50" y2={centre(i)} vectorEffect="non-scaling-stroke" />
-            ))}
-            <line x1="50" y1={centre(0)} x2="50" y2={centre(n - 1)} vectorEffect="non-scaling-stroke" />
-            <line x1="50" y1="50" x2="100" y2="50" vectorEffect="non-scaling-stroke" />
-          </svg>
+          <div className="bk-gap" />
 
           {/* Final */}
           <div className="bk-col">
@@ -131,6 +192,7 @@ export default function Bracket({
                   🏁 Final
                   {stage.kind === 'final' && <span className="bk-next">NEXT</span>}
                 </div>
+                <div className="bk-plates" ref={finalRef}>
                 {Array.from({ length: finalSlots }, (_, i) => {
                   const e = finalists[i]
                   if (e == null) return <Plate key={`slot${i}`} state="tbd" />
@@ -146,25 +208,25 @@ export default function Bracket({
                     />
                   )
                 })}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Final -> champion connector */}
-          <svg className="bk-spine short" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-            <line x1="0" y1="50" x2="100" y2="50" vectorEffect="non-scaling-stroke" />
-          </svg>
+          <div className="bk-gap short" />
 
           {/* Champion */}
           <div className="bk-col">
             <div className="bk-slot">
               <div className="bk-champ-wrap">
                 <div className="bk-match-label">Champion</div>
-                {champion ? (
-                  <Plate racer={racers[champion.entrant]} time={champion.finalTime} state="win" />
-                ) : (
-                  <Plate state="tbd" />
-                )}
+                <div className="bk-plates" ref={champRef}>
+                  {champion ? (
+                    <Plate racer={racers[champion.entrant]} time={champion.finalTime} state="win" />
+                  ) : (
+                    <Plate state="tbd" />
+                  )}
+                </div>
                 <div className={`bk-trophy ${done ? 'won' : ''}`}>🏆</div>
               </div>
             </div>
@@ -183,13 +245,19 @@ export default function Bracket({
               <div
                 key={r.entrant}
                 className={`bk-srow ${r.status}`}
-                style={{ ['--lane-color' as string]: racers[r.entrant]?.color }}
+                style={{ ['--lane-color' as string]: racers[r.entrant]?.colors.body }}
               >
                 <span className="bk-place">
                   {r.place != null && r.place <= 3 ? ['🥇', '🥈', '🥉'][r.place - 1] : r.place}
                 </span>
                 <span className="bk-sname">
-                  <span className="lane-dot" />
+                  {racers[r.entrant] && (
+                    <AnimalAvatar
+                      design={racers[r.entrant].design}
+                      colors={racers[r.entrant].colors}
+                      size={20}
+                    />
+                  )}
                   {racers[r.entrant]?.name}
                 </span>
                 <span className="bk-stime">

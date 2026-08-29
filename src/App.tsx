@@ -1078,7 +1078,11 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         {playing && bracketOpen && tourney && (
           <Bracket
             tournament={tourney}
-            racers={entrants.map((e) => ({ name: e.name, color: e.colors.body }))}
+            racers={entrants.map((e) => ({
+              name: e.name,
+              colors: e.colors,
+              design: e.designId ? saved.find((d) => d.id === e.designId) ?? null : null,
+            }))}
             onStart={startStage}
             onRestart={restartCup}
             onExit={backToSetup}

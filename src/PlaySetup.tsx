@@ -4,6 +4,7 @@ import { AnimalDesign } from './studio/model'
 import { ALL_PRESETS, EnvParams, PARTICLE_META, ParticleKind, cloneParams } from './env/model'
 import { loadEnvLibrary } from './env/library'
 import { MIN_ENTRANTS } from './tournament'
+import AnimalAvatar from './Avatar'
 import './setup.css'
 
 const DEFAULT_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
@@ -34,6 +35,7 @@ export interface PlayConfig {
 interface Option extends Pick {
   key: string
   swatch: string
+  design: AnimalDesign | null
 }
 
 function colorsOf(d: AnimalDesign): AnimalColors {
@@ -58,6 +60,7 @@ export default function PlaySetup({
       colors: colorsOf(d),
       name: d.name,
       swatch: colorsOf(d).body,
+      design: d,
     }))
     const defaults: Option[] = DEFAULT_NAMES.map((name, i) => ({
       key: `default:${i}`,
@@ -65,6 +68,7 @@ export default function PlaySetup({
       colors: ANIMAL_PALETTES[i],
       name,
       swatch: ANIMAL_PALETTES[i].body,
+      design: null,
     }))
     return [...customs, ...defaults]
   }, [saved])
@@ -161,7 +165,7 @@ export default function PlaySetup({
                   onClick={() => toggle(o.key)}
                 >
                   {on && <span className="racer-order">{idx + 1}</span>}
-                  <span className="racer-swatch" />
+                  <AnimalAvatar design={o.design} colors={o.colors} size={46} />
                   <span className="racer-cardname">{o.name}</span>
                   {o.designId === null && <span className="racer-tag">default</span>}
                 </button>

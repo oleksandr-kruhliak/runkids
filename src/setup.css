@@ -310,3 +310,15 @@
 .tourney-opts .setup-note {
   margin: 6px 0 0;
 }
+
+/* Animal portraits on the racer cards */
+.avatar {
+  display: block;
+  image-rendering: pixelated;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.racer-card .avatar {
+  margin-bottom: 2px;
+}
