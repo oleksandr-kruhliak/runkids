@@ -44,6 +44,72 @@ import {
 
 const CORRIDOR = ((NUM_LANES - 1) / 2) * LANE_SPACING + 2.6 // road + clearance
 const REACH = 38
+/** How far out from the road scenery may stand. */
+const BAND = 30
+/** Beyond this a spot counts as wide open; nothing needs more room than it. */
+const MAX_CLEAR = 46
+// Ceilings on scattered pieces, so a very long course stays affordable. The
+// voxel sets merge into a handful of instanced meshes and scale well; the
+// classic set is one React mesh per item, so it pays per draw call.
+const MAX_VOXEL_PIECES = 620
+const MAX_CLASSIC_PIECES = 260
+// The far band that forms the skyline: sparse, but reaching most of the way
+// out to the fog so the horizon is never bare ground.
+const FAR_MIN = 44
+const FAR_BAND = 110
+const FAR_PER_100 = 6
+const MAX_FAR_PIECES = 190
+
+// Nearest-point lookups run once per candidate spot, and a five-minute course
+// has thousands of centreline samples — so bucket the points and only measure
+// against the cells that could hold a closer one.
+type PointGrid = { cell: number; map: Map<number, THREE.Vector3[]> }
+
+const gridKey = (gx: number, gz: number) => gx * 73856093 + gz * 19349663
+
+function buildGrid(pts: THREE.Vector3[], cell: number): PointGrid {
+  const map = new Map<number, THREE.Vector3[]>()
+  for (let k = 0; k < pts.length; k += 2) {
+    const p = pts[k]
+    const key = gridKey(Math.floor(p.x / cell), Math.floor(p.z / cell))
+    const arr = map.get(key)
+    if (arr) arr.push(p)
+    else map.set(key, [p])
+  }
+  return { cell, map }
+}
+
+/** Distance to the nearest centreline point, saturating at MAX_CLEAR. */
+function nearestDist(grid: PointGrid, x: number, z: number): number {
+  const { cell, map } = grid
+  const gx = Math.floor(x / cell)
+  const gz = Math.floor(z / cell)
+  const r = Math.ceil(MAX_CLEAR / cell)
+  let bestSq = Infinity
+  for (let a = -r; a <= r; a++) {
+    for (let b = -r; b <= r; b++) {
+      const arr = map.get(gridKey(gx + a, gz + b))
+      if (!arr) continue
+      for (const p of arr) {
+        const dx = p.x - x
+        const dz = p.z - z
+        const dSq = dx * dx + dz * dz
+        if (dSq < bestSq) bestSq = dSq
+      }
+    }
+  }
+  return bestSq === Infinity ? MAX_CLEAR : Math.min(MAX_CLEAR, Math.sqrt(bestSq))
+}
+
+/**
+ * How many pieces to scatter. Scales with the length of the course, not the
+ * area of its bounding box: what matters is how much roadside there is to
+ * dress, and that grows linearly however tightly the course is folded. The
+ * fixed term keeps a short course as lush as it has always been.
+ */
+function pieceCount(density: number, length: number, per100: number, max: number): number {
+  return Math.min(max, Math.round(density * 0.9 + (length / 100) * per100 * density))
+}
 
 const rnd = (n: number) => {
   const s = Math.sin(n * 127.1 + 311.7) * 43758.5453
@@ -506,17 +572,21 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
   const grassTop = env.grass
   const isVoxel = set !== 'classic'
 
-  // Shared scatter helper: pick spots away from the road, remembering how far
-  // each one is from the nearest track point so big structures (mountains,
-  // plateaus with rivers) can demand extra clearance.
+  // Shared scatter helper: pick spots in the band alongside the road,
+  // remembering how far each one is from the nearest track point so big
+  // structures (mountains, plateaus with rivers) can demand extra clearance.
+  //
+  // Spots are drawn from the course itself rather than from its bounding box.
+  // A five-minute lap spans a square roughly 160x larger in area than a short
+  // one, so box-scattering put nearly everything out in empty middle distance,
+  // well past the fog, and left the roadside bare.
   const scatterSpots = (
     count: number,
-    half: number,
-    cx: number,
-    cz: number,
     pts: THREE.Vector3[],
+    grid: PointGrid,
     clearance: number,
     salt: number,
+    band = BAND,
   ) => {
     const out: { x: number; z: number; seed: number; clear: number }[] = []
     let tries = 0
@@ -524,16 +594,15 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     while (out.length < count && tries < count * 8) {
       tries++
       i++
-      const x = cx + (rnd(i * 2 + 1 + salt) - 0.5) * 2 * half
-      const z = cz + (rnd(i * 2 + 2 + salt) - 0.5) * 2 * half
-      let nearSq = Infinity
-      for (let k = 0; k < pts.length; k += 2) {
-        const dx = pts[k].x - x
-        const dz = pts[k].z - z
-        const dSq = dx * dx + dz * dz
-        if (dSq < nearSq) nearSq = dSq
-      }
-      const clear = Math.sqrt(nearSq)
+      // Anchor on a random point of the centreline, then step off sideways.
+      const p = pts[Math.min(pts.length - 1, Math.floor(rnd(i * 3 + 1 + salt) * pts.length))]
+      const a = rnd(i * 3 + 2 + salt) * Math.PI * 2
+      const off = clearance + 1 + rnd(i * 3 + 3 + salt) * band
+      const x = p.x + Math.cos(a) * off
+      const z = p.z + Math.sin(a) * off
+      // A course folds back on itself, so the anchor's own offset says nothing
+      // about the neighbouring stretch — measure against the whole centreline.
+      const clear = nearestDist(grid, x, z)
       if (clear < clearance) continue
       out.push({ x, z, seed: i + salt, clear })
     }
@@ -543,12 +612,10 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
   // ---- Classic set: low-poly JSX items ----
   const items = useMemo<Item[]>(() => {
     if (isVoxel || density <= 0 || track.length === 0) return []
-    const cx = track.boundsCenter.x
-    const cz = track.boundsCenter.z
-    const half = track.radius + REACH
-    const areaScale = Math.max(0.5, Math.min(2, (half * half) / 1600))
-    const count = Math.round(density * 0.9 * areaScale)
-    return scatterSpots(count, half, cx, cz, track.center.points, CORRIDOR, 0).map((sp, n) => {
+    const pts = track.center.points
+    const grid = buildGrid(pts, 12)
+    const count = pieceCount(density, track.length, 0.16, MAX_CLASSIC_PIECES)
+    return scatterSpots(count, pts, grid, CORRIDOR, 0).map((sp, n) => {
       const roll = rnd(sp.seed * 5 + 3)
       const kind: ClassicKind =
         extra !== 'none' && roll < 0.14
@@ -581,12 +648,11 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
     const smoke: SmokeSpot[] = []
     const cx = track.boundsCenter.x
     const cz = track.boundsCenter.z
-    const half = track.radius + REACH
-    const areaScale = Math.max(0.5, Math.min(2, (half * half) / 1600))
-    const count = Math.min(140, Math.round(density * 1.1 * areaScale))
     const pts = track.center.points
+    const grid = buildGrid(pts, 12)
+    const count = pieceCount(density, track.length, 0.24, MAX_VOXEL_PIECES)
 
-    const spots = scatterSpots(count, half, cx, cz, pts, CORRIDOR + 2, 1000)
+    const spots = scatterSpots(count, pts, grid, CORRIDOR + 2, 1000)
     let balloons = 0
     let ferris = 0
     for (const sp of spots) {
@@ -700,16 +766,8 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
       }
     }
 
-    // Backdrop ring: big landmarks strictly beyond the track's bounding
-    // radius (plus the widest structure's footprint) so they can never sit on
-    // a distant stretch of a large course.
-    const ringCount = Math.round(14 * Math.max(0.7, areaScale))
-    for (let i = 0; i < ringCount; i++) {
-      const a = (i / ringCount) * Math.PI * 2 + rnd(i + 77) * 0.5
-      const rr = track.radius + 12 + rnd(i + 88) * (REACH - 14)
-      const x = cx + Math.cos(a) * rr
-      const z = cz + Math.sin(a) * rr
-      const seed = 5000 + i
+    // One big landmark: the silhouettes that make up the skyline.
+    const landmark = (x: number, z: number, seed: number) => {
       switch (set) {
         case 'forest':
           if (rnd(seed) > 0.5) vTallTree(bag, x, z, seed, tree)
@@ -741,6 +799,24 @@ export default function Scenery({ track, env }: { track: Track; env: EnvParams }
           else vCrater(bag, x, z, seed, true)
           break
       }
+    }
+
+    // Backdrop ring: landmarks strictly beyond the course's bounding radius,
+    // so they can never sit on a distant stretch of it. Spacing, not count, is
+    // what should stay put as the course grows.
+    const ringCount = Math.max(12, Math.min(48, Math.round((2 * Math.PI * track.radius) / 30)))
+    for (let i = 0; i < ringCount; i++) {
+      const a = (i / ringCount) * Math.PI * 2 + rnd(i + 77) * 0.5
+      const rr = track.radius + 12 + rnd(i + 88) * (REACH - 14)
+      landmark(cx + Math.cos(a) * rr, cz + Math.sin(a) * rr, 5000 + i)
+    }
+
+    // Far band: the same landmarks, but following the road out to about the
+    // fog line. On a long course the ring ends up hundreds of units away —
+    // past the fog and out of shot — which left the horizon an empty field.
+    const farCount = Math.min(MAX_FAR_PIECES, Math.round((track.length / 100) * FAR_PER_100))
+    for (const sp of scatterSpots(farCount, pts, grid, FAR_MIN, 7000, FAR_BAND)) {
+      landmark(sp.x, sp.z, sp.seed)
     }
 
     return { bag, jsx, smoke }

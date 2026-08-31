@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import AnimalAvatar from './Avatar'
+import { clockUnit } from './format'
 import { AnimalDesign } from './studio/model'
 import { AnimalColors } from './track/Animal'
 import {
@@ -17,7 +18,7 @@ export interface BracketRacer {
   design: AnimalDesign | null
 }
 
-const fmt = (t: number | null) => (t == null ? '' : `${t.toFixed(1)}s`)
+const fmt = (t: number | null) => (t == null ? '' : clockUnit(t))
 
 /** One name plate: accent bar, racer name, and a time once they've raced. */
 function Plate({

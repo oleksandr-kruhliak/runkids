@@ -35,6 +35,7 @@ import {
 } from './show'
 import { LineupCard, OutroCard, StandingsCard, TitleCard } from './ShowCards'
 import TrackMap from './TrackMap'
+import { clock, clockUnit, isLong } from './format'
 import Confetti from './Confetti'
 import { BASE_SPEED, generateLaneObstacles, generateShape } from './track/generate'
 import Obstacles from './track/Obstacles'
@@ -47,6 +48,7 @@ import { EnvParams, SUMMER, cloneParams } from './env/model'
 import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
 import { cheer, initAudio, setAudioEnabled, setCrowd, sfx } from './audio'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
+import SunLight from './track/SunLight'
 import { Fireworks, Grandstands, StartGate, Trackside } from './track/Stadium'
 import './styles.css'
 
@@ -58,6 +60,9 @@ interface Action {
 }
 
 const LANE_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
+
+// The top-left course map is built and wired up but switched off for now.
+const SHOW_TRACK_MAP = false
 
 const DEFAULT_CAM: FollowCam = { dist: 6.76, azim: -0.98, elev: 0.44 }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
@@ -1138,16 +1143,10 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             sunElev={env.sunElev ?? 55}
           />
           <hemisphereLight args={env.night ? ['#4a5a8a', '#1c2438', 0.5] : ['#ffffff', '#9db4c0', 0.9]} />
-          <directionalLight
-            position={sunPos}
+          <SunLight
+            offset={sunPos}
             color={env.night ? '#aebadd' : sunTint(env.sunElev ?? 55)}
             intensity={env.sun}
-            castShadow
-            shadow-mapSize={[2048, 2048]}
-            shadow-camera-left={-90}
-            shadow-camera-right={90}
-            shadow-camera-top={90}
-            shadow-camera-bottom={-90}
           />
 
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
@@ -1260,8 +1259,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 <>
                   <div className="trial-now">🏁 Grand Prix!</div>
                   <div className="trial-time">
-                    {displayTime.toFixed(1)}
-                    <span className="unit">s</span>
+                    {clock(displayTime)}
+                    {!isLong(displayTime) && <span className="unit">s</span>}
                   </div>
                   <div className="trial-progress">
                     {trialRunningCount} of {racerCount} finished
@@ -1286,8 +1285,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                   {label(trialLane)} is running!
                 </div>
                 <div className="trial-time">
-                  {displayTime.toFixed(1)}
-                  <span className="unit">s</span>
+                  {clock(displayTime)}
+                  {!isLong(displayTime) && <span className="unit">s</span>}
                 </div>
                 <div className="trial-progress">Racer {trialLane + 1} of {racerCount}</div>
               </>
@@ -1295,8 +1294,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
               <>
                 <div className="trial-now">🏁 {label(trialRunningCount - 1)} finished!</div>
                 <div className="trial-time done">
-                  {(trialTimes[trialRunningCount - 1] ?? 0).toFixed(1)}
-                  <span className="unit">s</span>
+                  {clock(trialTimes[trialRunningCount - 1] ?? 0)}
+                  {!isLong(trialTimes[trialRunningCount - 1] ?? 0) && <span className="unit">s</span>}
                 </div>
                 <div className="trial-progress">
                   {trialRunningCount < racerCount ? `Get ready, ${label(trialRunningCount)}…` : 'Adding up the winners…'}
@@ -1307,7 +1306,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         )}
 
         {/* Broadcast overlay: top-down course map with a dot per animal */}
-        {trialActive && !trialDone && !introOpen && !bracketOpen && track.length > 0 && (
+        {SHOW_TRACK_MAP && trialActive && !trialDone && !introOpen && !bracketOpen && track.length > 0 && (
           <TrackMap
             track={track}
             colors={racers.map((r) => r.colors.body)}
@@ -1325,7 +1324,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             {ladder.map((row, i) => (
               <div
                 key={row.lane}
-                className={`ladder-row ${row.time != null ? 'done' : ''} ${
+                className={`ladder-row ${i === 0 ? 'lead' : ''} ${row.time != null ? 'done' : ''} ${
                   trialMode === 'solo' && trialLane === row.lane ? 'live' : ''
                 }`}
                 style={{ ['--lane-color' as string]: laneHex(row.lane) }}
@@ -1336,7 +1335,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                 <span className="ladder-name">{label(row.lane)}</span>
                 <span className="ladder-val">
                   {row.time != null
-                    ? `${row.time.toFixed(1)}s`
+                    ? clockUnit(row.time)
                     : trialMode === 'together' || trialLane === row.lane
                       ? `${Math.round(row.pct)}%`
                       : '—'}
@@ -1419,7 +1418,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                     <span className="lane-dot" style={{ ['--lane-color' as string]: laneHex(r.lane)}} />
                     <span className="rank-name">{label(r.lane)}</span>
                     {i > 0 && <span className="rank-gap">+{(r.time - ranking[0].time).toFixed(1)}s</span>}
-                    <span className="rank-time">{r.time.toFixed(1)}s</span>
+                    <span className="rank-time">{clockUnit(r.time)}</span>
                   </li>
                 ))}
               </ol>

@@ -488,12 +488,15 @@ body {
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(360px, calc(100% - 24px));
-  background: linear-gradient(160deg, #fff, #f3ecff);
-  border: 3px solid #7c4dff;
-  border-radius: 22px;
-  box-shadow: 0 10px 30px rgba(60, 20, 120, 0.28);
-  padding: 14px 16px 12px;
+  width: min(400px, calc(100% - 24px));
+  background: linear-gradient(168deg, #fff, #efe6ff);
+  border: 4px solid #7c4dff;
+  border-radius: 26px;
+  /* A solid lip under the card reads as thickness, not blur. */
+  box-shadow:
+    0 7px 0 #5b28bd,
+    0 12px 34px rgba(46, 12, 100, 0.4);
+  padding: 13px 16px 12px;
   text-align: center;
   z-index: 7;
 }
@@ -530,36 +533,57 @@ body {
 }
 
 .trial-time {
-  font-size: 54px;
+  /* Extruded block numerals: a stroked outline, a stack of solid shadows for
+     the side of the letter, then one soft shadow to sit it on the card. */
+  --lo: #5b28bd;
+  --hi: #a97bff;
+  font-size: 60px;
   font-weight: 900;
   line-height: 1;
-  letter-spacing: -0.02em;
-  color: #7c4dff;
+  letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
-  margin: 2px 0;
-  text-shadow: 0 3px 0 rgba(124, 77, 255, 0.18);
-  animation: pop 0.5s ease infinite alternate;
+  margin: 6px 0 14px;
+  color: #fff;
+  -webkit-text-stroke: 3px var(--lo);
+  paint-order: stroke fill;
+  text-shadow:
+    0 2px 0 var(--hi),
+    0 4px 0 var(--lo),
+    0 6px 0 var(--lo),
+    0 8px 0 var(--lo),
+    0 12px 16px rgba(46, 12, 100, 0.4);
+  animation: tick 0.9s ease-in-out infinite alternate;
 }
 
 .trial-time.done {
-  color: #2e9e5b;
+  --lo: #1f7a45;
+  --hi: #62d38f;
   animation: none;
 }
 
 .trial-count {
-  font-size: 82px;
+  --lo: #c24a00;
+  --hi: #ffab5e;
+  font-size: 88px;
   font-weight: 900;
   line-height: 1;
-  color: #ff7a1a;
+  color: #fff;
   margin: 4px 0;
-  text-shadow: 0 4px 0 rgba(255, 122, 26, 0.22);
+  -webkit-text-stroke: 4px var(--lo);
+  paint-order: stroke fill;
+  margin-bottom: 16px;
+  text-shadow:
+    0 3px 0 var(--hi),
+    0 6px 0 var(--lo),
+    0 9px 0 var(--lo),
+    0 14px 18px rgba(120, 45, 0, 0.4);
   animation: countpop 0.7s ease;
 }
 
 .trial-count.go {
-  color: #2e9e5b;
-  font-size: 68px;
-  text-shadow: 0 4px 0 rgba(46, 158, 91, 0.22);
+  --lo: #1f7a45;
+  --hi: #62d38f;
+  font-size: 74px;
 }
 
 @keyframes countpop {
@@ -570,9 +594,15 @@ body {
 }
 
 .trial-time .unit {
-  font-size: 24px;
-  font-weight: 800;
-  margin-left: 4px;
+  font-size: 26px;
+  font-weight: 900;
+  margin-left: 3px;
+}
+
+/* A heartbeat rather than a pulse — it reads as "running", not "alarm". */
+@keyframes tick {
+  from { transform: scale(1) translateZ(0); }
+  to { transform: scale(1.035) translateZ(0); }
 }
 
 @keyframes pop {
@@ -851,15 +881,22 @@ body {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 7px 10px;
-  border-radius: 10px;
+  padding: 8px 10px;
+  border-radius: 13px;
   overflow: hidden;
-  margin-bottom: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  margin-bottom: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.22);
   color: #fff;
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 800;
   transition: background 0.2s;
+}
+
+/* The leader's row lifts off the stack. */
+.ladder-row.lead {
+  background: rgba(255, 213, 74, 0.2);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.25), 0 0 0 2px rgba(255, 213, 74, 0.5);
 }
 
 .ladder-row.live {
@@ -875,17 +912,29 @@ body {
   left: 0;
   top: 0;
   bottom: 0;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.16));
-  border-right: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 13px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--lane-color) 34%, transparent),
+    color-mix(in srgb, var(--lane-color) 62%, transparent)
+  );
+  border-right: 3px solid color-mix(in srgb, var(--lane-color) 85%, #fff);
   transition: width 0.2s linear;
   pointer-events: none;
 }
 
 .ladder-pos {
   position: relative;
-  width: 20px;
-  text-align: center;
-  font-weight: 800;
+  width: 25px;
+  height: 25px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(#5b6480, #39405a);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
 }
 
@@ -909,9 +958,23 @@ body {
 
 .ladder-val {
   position: relative;
+  flex: none;
+  min-width: 54px;
+  text-align: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: linear-gradient(#fff, #e6ecff);
+  color: #2a3350;
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
-  color: #ffe9a8;
+  font-size: 15px;
+  font-weight: 900;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* Finishers get the gold treatment. */
+.ladder-row.done .ladder-val {
+  background: linear-gradient(#ffe9a8, #f5bb3c);
+  color: #4a3208;
 }
 
 /* ---- Broadcast overlay: pre-race intro card ---- */

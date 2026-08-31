@@ -1,6 +1,7 @@
 import AnimalAvatar from './Avatar'
 import { BracketRacer } from './Bracket'
 import { SeriesRow } from './show'
+import { clockUnit } from './format'
 
 // Full-screen broadcast cards for the auto-show. They sit between the races
 // of a recorded episode, so everything on them is sized to be read from a
@@ -99,7 +100,7 @@ export function StandingsCard({
                 <span className="show-place">{medal(i)}</span>
                 <AnimalAvatar design={r.design} colors={r.colors} size={38} />
                 <span className="show-name">{r.name}</span>
-                <span className="show-best">{row.best != null ? `${row.best.toFixed(1)}s` : '—'}</span>
+                <span className="show-best">{row.best != null ? clockUnit(row.best) : '—'}</span>
                 {showPoints && <span className="show-pts">{row.points}</span>}
               </div>
             )
