@@ -15,6 +15,9 @@ interface Props {
   radius: number
 }
 
+/** Radius of the weather window carried around the viewer. */
+const FIELD = 88
+
 const HEIGHT = 26 // how high above the ground particles spawn
 
 interface Spec {
@@ -105,13 +108,17 @@ export default function Particles({ kind, density, center, radius }: Props) {
   const data = useMemo(() => {
     if (kind === 'none' || density <= 0) return null
     const spec = SPECS[kind]
-    // Scale count with area so big tracks don't look sparse, capped for perf.
-    const areaScale = Math.min(2.2, (radius * radius) / 900)
+    // Weather is only ever seen close up, so it fills a window around the
+    // viewer rather than the whole course. Spreading a capped number of flakes
+    // over a five-minute course's bounds thinned them out to nothing.
+    const field = Math.min(radius, FIELD)
+    const areaScale = Math.min(2.2, (field * field) / 900)
     const count = Math.max(20, Math.min(spec.max, Math.round(density * 5 * Math.max(0.5, areaScale))))
     const parts = Array.from({ length: count }, (_, i) => {
       const a = rnd(i + 1) * Math.PI * 2
-      const r = Math.sqrt(rnd(i + 50)) * radius
+      const r = Math.sqrt(rnd(i + 50)) * field
       return {
+        field,
         x: Math.cos(a) * r,
         z: Math.sin(a) * r,
         y: rnd(i + 200) * HEIGHT,
@@ -121,7 +128,7 @@ export default function Particles({ kind, density, center, radius }: Props) {
       }
     })
     const geometry = spec.geometry()
-    return { spec, parts, count, geometry }
+    return { spec, parts, count, geometry, field }
   }, [kind, density, radius])
 
   const dummy = useMemo(() => new THREE.Object3D(), [])
@@ -130,7 +137,14 @@ export default function Particles({ kind, density, center, radius }: Props) {
     const inst = ref.current
     if (!inst || !data) return
     const t = state.clock.elapsedTime
-    const { spec, parts } = data
+    const { spec, parts, field } = data
+    const span = field * 2
+    // Anchor the window on the viewer, but wrap each flake through it rather
+    // than dragging the whole field along — dragging would pin the weather to
+    // the camera and kill the parallax.
+    const camX = state.camera.position.x
+    const camZ = state.camera.position.z
+    const wrap = (v: number) => ((((v + field) % span) + span) % span) - field
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i]
       // Wrap by time so pausing/resuming stays consistent (negative fall
@@ -139,7 +153,11 @@ export default function Particles({ kind, density, center, radius }: Props) {
       if (y < 0) y += HEIGHT
       const sx = spec.sway ? Math.sin(t * 0.8 + p.phase) * spec.sway : 0
       const sz = spec.sway ? Math.cos(t * 0.6 + p.phase * 1.3) * spec.sway * 0.7 : 0
-      dummy.position.set(center.x + p.x + sx, y, center.z + p.z + sz)
+      dummy.position.set(
+        camX + wrap(center.x + p.x - camX) + sx,
+        y,
+        camZ + wrap(center.z + p.z - camZ) + sz,
+      )
       if (spec.tumble) {
         dummy.rotation.set(t * spec.tumble + p.phase, p.phase * 2, t * spec.tumble * 0.7)
       } else {

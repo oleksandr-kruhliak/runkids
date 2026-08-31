@@ -13,6 +13,13 @@ const rnd = (n: number) => {
 const BIRD_COLORS = ['#3a3a42', '#2e8ae8', '#f2f2ee', '#e8722e']
 const CUBES_PER_BIRD = 3 // body + two wings
 
+/**
+ * How far out ambient effects may sit. Everything here is only ever seen from
+ * wherever the camera is, so on a course bigger than this they follow the
+ * viewer rather than scaling with the course and drifting out of shot.
+ */
+const LOCAL = 90
+
 /** Small V-formation flocks slowly circling the sky above the world. */
 export function Birds({
   center,
@@ -31,7 +38,7 @@ export function Birds({
       Array.from({ length: flocks }, (_, i) => ({
         n: 4 + Math.floor(rnd(i * 3 + 1) * 3),
         h: 12 + rnd(i * 5 + 2) * 10,
-        r: radius * (0.45 + rnd(i * 7 + 3) * 0.6) + 8,
+        r: Math.min(radius, LOCAL) * (0.45 + rnd(i * 7 + 3) * 0.6) + 8,
         speed: (0.05 + rnd(i * 11 + 4) * 0.035) * (i % 2 === 0 ? 1 : -1),
         phase: rnd(i * 13 + 5) * Math.PI * 2,
         flap: 7 + rnd(i * 17 + 6) * 4,
@@ -39,6 +46,9 @@ export function Birds({
       })),
     [flocks, radius],
   )
+  // Anchor the flight paths near the viewer on a big course: circling the
+  // bounding centre would park them hundreds of units off-screen.
+  const anchor = useMemo(() => new THREE.Vector3(), [])
 
   const total = flock.reduce((sum, f) => sum + f.n, 0) * CUBES_PER_BIRD
 
@@ -46,6 +56,11 @@ export function Birds({
     const inst = ref.current
     if (!inst) return
     const t = state.clock.elapsedTime
+    anchor.set(
+      radius > LOCAL ? state.camera.position.x : center.x,
+      0,
+      radius > LOCAL ? state.camera.position.z : center.z,
+    )
     let idx = 0
     for (const f of flock) {
       const a = t * f.speed + f.phase
@@ -57,8 +72,8 @@ export function Birds({
         // V formation: trail behind and to the side of the leader
         const backX = -hx * Math.abs(k) * 1.3 + hz * k * 1.0
         const backZ = -hz * Math.abs(k) * 1.3 - hx * k * 1.0
-        const x = center.x + Math.cos(a) * f.r + backX
-        const z = center.z + Math.sin(a) * f.r + backZ
+        const x = anchor.x + Math.cos(a) * f.r + backX
+        const z = anchor.z + Math.sin(a) * f.r + backZ
         const y = f.h + Math.sin(t * 1.2 + b) * 0.4
         const flap = Math.sin(t * f.flap + b * 1.7)
         // body
@@ -132,8 +147,14 @@ export function Lightning({ center, radius }: { center: THREE.Vector3; radius: n
     if (t > st.next) {
       st.until = t + 0.16 + rnd(st.seed) * 0.14
       st.next = t + 3.5 + rnd(st.seed + 1) * 5.5
-      st.x = center.x + (rnd(st.seed + 2) - 0.5) * radius * 1.6
-      st.z = center.z + (rnd(st.seed + 3) - 0.5) * radius * 1.6
+      // Strike within sight of the viewer. Scaled to the course's bounds, a
+      // long one threw every bolt well outside the fog, so the storm flashed
+      // but nothing was ever there to see.
+      const spread = Math.min(radius, LOCAL) * 1.6
+      const ax = radius > LOCAL ? frameState.camera.position.x : center.x
+      const az = radius > LOCAL ? frameState.camera.position.z : center.z
+      st.x = ax + (rnd(st.seed + 2) - 0.5) * spread
+      st.z = az + (rnd(st.seed + 3) - 0.5) * spread
       st.seed += 7
     }
     const on = t < st.until

@@ -213,6 +213,8 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
   }, [mode, generated, actions])
 
   const track = useMemo(() => buildTrack(shape, laneObstacles), [shape, laneObstacles])
+  // Ground reaches past the far edge of the course, plus a fog depth of margin.
+  const groundSize = Math.max(1000, (track.radius + 300) * 2)
 
   const leadRef = useRef<LeadState>({
     active: false,
@@ -1149,8 +1151,14 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
             intensity={env.sun}
           />
 
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
-            <planeGeometry args={[1000, 1000]} />
+          {/* Sized and centred on the course: a fixed plane at the origin ran
+              out from under a long one, leaving the racers over open sky. */}
+          <mesh
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[track.boundsCenter.x, -0.02, track.boundsCenter.z]}
+            receiveShadow
+          >
+            <planeGeometry args={[groundSize, groundSize]} />
             <meshStandardMaterial color={env.ground} />
           </mesh>
           <Scenery track={track} env={env} />

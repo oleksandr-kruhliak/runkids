@@ -223,6 +223,12 @@ export default function Sky({
   night = false,
   sunElev = 55,
 }: SkyProps) {
+  // The sky is meant to read as infinitely far away, but the dome is a
+  // 520-unit sphere and you only see a BackSide sphere from inside it. On a
+  // long course the racers travel further than that and leave the sky behind,
+  // taking the sun and clouds with it. Anchoring the whole group to the camera
+  // keeps the viewer at its centre wherever the race goes.
+  const skyRef = useRef<THREE.Group>(null)
   const cloudsRef = useRef<THREE.Group>(null)
   const clouds = useMemo(
     () =>
@@ -243,12 +249,15 @@ export default function Sky({
   )
 
   // Whole cloud layer drifts slowly around the sky.
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     if (cloudsRef.current) cloudsRef.current.rotation.y += delta * 0.004
+    // Follow on the ground plane only: riding the camera's height too would
+    // drag the horizon up and down with every camera move.
+    if (skyRef.current) skyRef.current.position.set(camera.position.x, 0, camera.position.z)
   })
 
   return (
-    <group>
+    <group ref={skyRef}>
       <Dome zenith={zenith} mid={mid} horizon={horizon} />
       {night ? <NightLights /> : <Sun elevDeg={sunElev} />}
       <group ref={cloudsRef}>
