@@ -24,6 +24,7 @@ import RaceAnimal from './RaceAnimal'
 import { AnimalDesign } from '../studio/model'
 import { SfxName, focusGain, setSfxFocus, sfx } from '../audio'
 import { PieceType } from './pieces'
+import { LeadHold, stickyLead } from './follow'
 
 /** Rounded-pill name tag rendered to a canvas texture, shown as a sprite. */
 function makeTagTexture(name: string, color: string) {
@@ -234,6 +235,10 @@ export default function Riders({
   const xAxis = useMemo(() => new THREE.Vector3(), [])
   const yAxis = useMemo(() => new THREE.Vector3(), [])
 
+  // Sticky-lead state for the follow camera.
+  const ranks = useRef<number[]>([])
+  const leadHold = useRef<LeadHold>({ idx: -1, until: 0 })
+
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
     const t = state.clock.elapsedTime
@@ -437,11 +442,15 @@ export default function Riders({
             ? Infinity
             : dist.current[l]
         : dist.current[l]
+      ranks.current[l] = rank
       if (rank > leadDist) {
         leadDist = rank
         leadIdx = l
       }
     }
+
+    // Who the camera follows is sticky — see follow.ts for why.
+    leadIdx = stickyLead(leadHold.current, leadIdx, ranks.current, t, track.lanes.length)
 
     // Publish the animal the camera should follow: the chosen lane, or the
     // current leader when followTarget is -1.

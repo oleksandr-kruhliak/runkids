@@ -64,7 +64,7 @@ const LANE_NAMES = ['Fox', 'Bear', 'Frog', 'Koala', 'Duck']
 // The top-left course map is built and wired up but switched off for now.
 const SHOW_TRACK_MAP = false
 
-const DEFAULT_CAM: FollowCam = { dist: 6.76, azim: -0.98, elev: 0.44 }
+const DEFAULT_CAM: FollowCam = { dist: 8.0, azim: -0.98, elev: 0.37 }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
 /** A button that repeats its action while held down (touch-friendly). */

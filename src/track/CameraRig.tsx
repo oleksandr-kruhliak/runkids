@@ -39,15 +39,21 @@ type Shot =
   | { kind: 'orbit'; dist: number; azim: number; elev: number; dur: number }
   | { kind: 'trackside'; dur: number }
 
+// Distances are ~18% longer, and the eyeline a little lower, than the shots
+// this list started with: the animals are big enough to fill the frame on
+// their own, and leaving air around them shows the course they are racing on.
 const SHOTS: Shot[] = [
-  { kind: 'orbit', dist: 6.76, azim: -0.98, elev: 0.44, dur: 6 }, // hero chase
+  { kind: 'orbit', dist: 8.0, azim: -0.98, elev: 0.37, dur: 6 }, // hero chase
   { kind: 'trackside', dur: 4.5 },
-  { kind: 'orbit', dist: 4.6, azim: 0.14, elev: 0.2, dur: 4.5 }, // face close-up
-  { kind: 'orbit', dist: 8.5, azim: 1.45, elev: 0.32, dur: 5 }, // side profile
+  { kind: 'orbit', dist: 5.4, azim: 0.14, elev: 0.17, dur: 4.5 }, // face close-up
+  { kind: 'orbit', dist: 10.0, azim: 1.45, elev: 0.27, dur: 5 }, // side profile
   { kind: 'trackside', dur: 4.5 },
-  { kind: 'orbit', dist: 12.5, azim: -2.1, elev: 1.0, dur: 5.5 }, // high drone
-  { kind: 'orbit', dist: 7.2, azim: 2.95, elev: 0.14, dur: 5 }, // low behind
+  { kind: 'orbit', dist: 14.5, azim: -2.1, elev: 0.9, dur: 5.5 }, // high drone
+  { kind: 'orbit', dist: 8.5, azim: 2.95, elev: 0.12, dur: 5 }, // low behind
 ]
+
+/** Height above the animal the camera aims at; it sits low in frame. */
+const LOOK_Y = 0.72
 
 const ISO_DIR = new THREE.Vector3(0.9, 0.75, 1).normalize()
 const WORLD_UP = new THREE.Vector3(0, 1, 0)
@@ -81,6 +87,10 @@ export default function CameraRig({
 
   const desired = useRef(new THREE.Vector3())
   const look = useRef(new THREE.Vector3())
+  // Where the camera is actually aimed, eased toward `look`. Aiming straight
+  // at the subject hands every one of its twitches to the camera as rotation.
+  const aim = useRef(new THREE.Vector3())
+  const aimSet = useRef(false)
 
   // Auto-director state: current shot, when to cut, and the parked position
   // for trackside shots. `side` alternates which side of the track we park on.
@@ -113,6 +123,7 @@ export default function CameraRig({
       camera.lookAt(look.current)
       // Keep any orbiting centred on the subject rather than the old target.
       if (controls) controls.target.copy(look.current)
+      aimSet.current = false // the next follow shot must not ease in from here
       needFit.current = false
       return
     }
@@ -132,9 +143,9 @@ export default function CameraRig({
           shotSide.current = -shotSide.current
           shotPos.current
             .copy(lead.pos)
-            .addScaledVector(lead.tangent, 15)
-            .addScaledVector(lead.right, 8.5 * shotSide.current)
-            .addScaledVector(WORLD_UP, 2.6)
+            .addScaledVector(lead.tangent, 17.5)
+            .addScaledVector(lead.right, 10 * shotSide.current)
+            .addScaledVector(WORLD_UP, 2.4)
         }
       }
       const shot = SHOTS[shotIdx.current]
@@ -151,8 +162,12 @@ export default function CameraRig({
       }
       if (cut) camera.position.copy(desired.current)
       else camera.position.lerp(desired.current, shot.kind === 'trackside' ? 1 : 0.14)
-      look.current.copy(lead.pos).addScaledVector(WORLD_UP, 0.45)
-      camera.lookAt(look.current)
+      look.current.copy(lead.pos).addScaledVector(WORLD_UP, LOOK_Y)
+      // A cut is meant to be instant; everything else eases.
+      if (cut || !aimSet.current) aim.current.copy(look.current)
+      else aim.current.lerp(look.current, 0.16)
+      aimSet.current = true
+      camera.lookAt(aim.current)
       needFit.current = false
       return
     }
@@ -172,11 +187,17 @@ export default function CameraRig({
         .addScaledVector(lead.right, sx * horiz)
         .addScaledVector(WORLD_UP, vert)
       camera.position.lerp(desired.current, 0.14)
-      look.current.copy(lead.pos).addScaledVector(WORLD_UP, 0.45)
-      camera.lookAt(look.current)
+      look.current.copy(lead.pos).addScaledVector(WORLD_UP, LOOK_Y)
+      if (!aimSet.current) aim.current.copy(look.current)
+      else aim.current.lerp(look.current, 0.16)
+      aimSet.current = true
+      camera.lookAt(aim.current)
       needFit.current = false
       return
     }
+
+    // Not following any more — the next follow shot starts fresh.
+    aimSet.current = false
 
     if (needFit.current) {
       const c = centerRef.current
