@@ -24,7 +24,7 @@ import RaceAnimal from './RaceAnimal'
 import { AnimalDesign } from '../studio/model'
 import { SfxName, focusGain, setSfxFocus, sfx } from '../audio'
 import { PieceType } from './pieces'
-import { LeadHold, stickyLead } from './follow'
+import { FollowState, newFollowState, pickSubject } from './follow'
 
 /** Rounded-pill name tag rendered to a canvas texture, shown as a sprite. */
 function makeTagTexture(name: string, color: string) {
@@ -235,9 +235,13 @@ export default function Riders({
   const xAxis = useMemo(() => new THREE.Vector3(), [])
   const yAxis = useMemo(() => new THREE.Vector3(), [])
 
-  // Sticky-lead state for the follow camera.
+  // Camera-subject state: who leads, and whether we have cut away from them.
   const ranks = useRef<number[]>([])
-  const leadHold = useRef<LeadHold>({ idx: -1, until: 0 })
+  const followState = useRef<FollowState>(newFollowState())
+  // Every race opens on the leader, so the stint clock starts over with it.
+  useEffect(() => {
+    followState.current = newFollowState()
+  }, [resetSignal])
 
   useFrame((state, delta) => {
     const dt = Math.min(delta, 0.05)
@@ -449,13 +453,25 @@ export default function Riders({
       }
     }
 
-    // Who the camera follows is sticky — see follow.ts for why.
-    leadIdx = stickyLead(leadHold.current, leadIdx, ranks.current, t, track.lanes.length)
+    // Who the camera is on: mostly the leader, with cutaways to the best duel
+    // behind, and no cutaways once the leader is closing on the line. Only a
+    // grand prix has anyone else to cut to — a time trial runs one at a time.
+    const leaderDist = ranks.current[leadIdx] ?? 0
+    const progress = len > 0 ? Math.max(0, Math.min(1, leaderDist / len)) : 0
+    const subject = pickSubject(
+      followState.current,
+      leadIdx,
+      ranks.current,
+      t,
+      track.lanes.length,
+      progress,
+      !isTrial || allMode,
+    )
 
     // Publish the animal the camera should follow: the chosen lane, or the
-    // current leader when followTarget is -1.
+    // camera's own subject when followTarget is -1.
     const followIdx =
-      followTarget >= 0 && followTarget < track.lanes.length ? followTarget : leadIdx
+      followTarget >= 0 && followTarget < track.lanes.length ? followTarget : subject
     setSfxFocus(followIdx)
     const followLane = track.lanes[followIdx]
     if (followLane) {
