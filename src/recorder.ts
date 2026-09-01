@@ -30,10 +30,13 @@ export async function startTabRecording(onDone: (blob: Blob) => void): Promise<(
       'video/webm;codecs=vp9',
       'video/webm',
     ].find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
-  const rec = new MediaRecorder(
-    stream,
-    mime ? { mimeType: mime, videoBitsPerSecond: 12_000_000 } : undefined,
-  )
+  // Budget the bitrate for what is actually being captured: 12 Mbps is fine
+  // for 1080p and starves a 4K frame, which has four times the pixels.
+  const { width = 1920, height = 1080 } = stream.getVideoTracks()[0]?.getSettings() ?? {}
+  const pixels = width * height
+  const videoBitsPerSecond =
+    pixels >= 3840 * 2000 ? 45_000_000 : pixels >= 2560 * 1400 ? 24_000_000 : 12_000_000
+  const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond } : undefined)
   const chunks: Blob[] = []
   rec.ondataavailable = (e) => {
     if (e.data.size > 0) chunks.push(e.data)

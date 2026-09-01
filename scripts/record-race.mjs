@@ -17,7 +17,10 @@
 //   --lap <seconds>    Average lap length slider             (default 8)
 //   --obstacles <pct>  Obstacle density slider 0–100         (default 40)
 //   --out <file>       Output video path                     (default race-<time>.webm)
-//   --size <WxH>       Video size                            (default 1280x720)
+//   --size <WxH>       Layout size in CSS pixels             (default 1280x720)
+//   --scale <n>        Device pixel ratio; the video comes out at size x scale.
+//                      Use --size 1920x1080 --scale 2 for 4K with the HUD
+//                      still proportioned for 1080p          (default 1)
 //   --hold <seconds>   How long to linger on the podium      (default 5)
 //   --url <url>        App URL                               (default http://localhost:5173)
 //   --keep-ui          Don't hide the corner controls (skips the H key)
@@ -45,6 +48,10 @@ const lap = parseInt(opt('lap', '8'), 10)
 const obstacles = parseInt(opt('obstacles', '40'), 10)
 const out = opt('out', `race-${Date.now()}.webm`)
 const [w, h] = opt('size', '1280x720').split('x').map((n) => parseInt(n, 10))
+// Rendering at a bigger viewport would shrink the HUD against the frame, since
+// its type is sized in CSS pixels. Scaling the device pixel ratio instead keeps
+// the layout identical and just renders it with more pixels.
+const scale = Math.max(1, Math.min(4, parseFloat(opt('scale', '1'))))
 const hold = parseFloat(opt('hold', '5'))
 const url = opt('url', 'http://localhost:5173')
 
@@ -54,7 +61,8 @@ mkdirSync(videoDir, { recursive: true })
 console.log(
   `Recording: env=${env} mode=${mode} racers=${racers}` +
     (isCup ? ` heat=${heat} advance=${advance}` : '') +
-    ` lap=${lap}s obstacles=${obstacles}% → ${out}`,
+    ` lap=${lap}s obstacles=${obstacles}%` +
+    ` video=${w * scale}x${h * scale}${scale !== 1 ? ` (${w}x${h} @${scale}x)` : ''} → ${out}`,
 )
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true }).catch((e) => {
@@ -64,7 +72,8 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true }).cat
 const context = await browser
   .newContext({
     viewport: { width: w, height: h },
-    recordVideo: { dir: videoDir, size: { width: w, height: h } },
+    deviceScaleFactor: scale,
+    recordVideo: { dir: videoDir, size: { width: w * scale, height: h * scale } },
   })
   .catch((e) => {
     console.error(e.message.includes('ffmpeg') ? 'Missing ffmpeg — run: npx playwright install ffmpeg' : e.message)
