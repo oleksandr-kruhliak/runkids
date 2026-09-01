@@ -32,10 +32,11 @@ export async function startTabRecording(onDone: (blob: Blob) => void): Promise<(
     ].find((m) => MediaRecorder.isTypeSupported(m)) ?? ''
   // Budget the bitrate for what is actually being captured: 12 Mbps is fine
   // for 1080p and starves a 4K frame, which has four times the pixels.
-  const { width = 1920, height = 1080 } = stream.getVideoTracks()[0]?.getSettings() ?? {}
-  const pixels = width * height
-  const videoBitsPerSecond =
-    pixels >= 3840 * 2000 ? 45_000_000 : pixels >= 2560 * 1400 ? 24_000_000 : 12_000_000
+  // Keyed on width, not pixel count: a tab capture loses 150-300 rows to the
+  // browser's own chrome, so a real 4K grab arrives as something like
+  // 3840x1844 and an area threshold would quietly demote it to the tier below.
+  const { width = 1920 } = stream.getVideoTracks()[0]?.getSettings() ?? {}
+  const videoBitsPerSecond = width >= 3200 ? 45_000_000 : width >= 2200 ? 24_000_000 : 12_000_000
   const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond } : undefined)
   const chunks: Blob[] = []
   rec.ondataavailable = (e) => {
