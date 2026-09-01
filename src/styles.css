@@ -111,6 +111,14 @@ body {
   flex: 1;
   position: relative;
   min-height: 0;
+  /* Broadcast-style safe area. Every overlay keeps this much clear of the
+     frame edges, so nothing is lost behind a player's own chrome — and one
+     pair of numbers moves the whole HUD in or out. Container units, not
+     percentages: percentage padding resolves against width on all four
+     sides, which would make the top and bottom gaps wrong. */
+  container-type: size;
+  --ui-x: 5cqw;
+  --ui-y: 5cqh;
 }
 
 .stage canvas {
@@ -120,9 +128,9 @@ body {
 
 .follow-bar {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
+  top: var(--ui-y);
+  left: var(--ui-x);
+  right: var(--ui-x);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -175,8 +183,8 @@ body {
 
 .cam-controls {
   position: absolute;
-  right: 10px;
-  bottom: 12px;
+  right: var(--ui-x);
+  bottom: var(--ui-y);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -243,7 +251,7 @@ body {
 .hint-overlay {
   position: absolute;
   left: 50%;
-  bottom: 24px;
+  bottom: var(--ui-y);
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
@@ -485,7 +493,7 @@ body {
 /* ---- Time trial: running timer HUD ---- */
 .trial-hud {
   position: absolute;
-  top: 12px;
+  top: var(--ui-y);
   left: 50%;
   transform: translateX(-50%);
   width: min(400px, calc(100% - 24px));
@@ -653,7 +661,7 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  padding: 14px;
+  padding: var(--ui-y) var(--ui-x);
   pointer-events: none;
   background: linear-gradient(to top, rgba(30, 16, 60, 0.45), rgba(30, 16, 60, 0) 38%);
   z-index: 9;
@@ -761,8 +769,8 @@ body {
 
 .esc-hint {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: var(--ui-y);
+  right: var(--ui-x);
   z-index: 6;
   border: none;
   border-radius: 999px;
@@ -855,7 +863,7 @@ body {
 /* ---- Broadcast overlay: live standings ladder ---- */
 .ladder {
   position: absolute;
-  left: 14px;
+  left: var(--ui-x);
   top: 50%;
   transform: translateY(-50%);
   width: min(264px, 44vw);
@@ -1097,8 +1105,8 @@ body {
 /* Corner chips shown during immersive play (menu + auto-cam toggle) */
 .play-corner {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: var(--ui-y);
+  right: var(--ui-x);
   display: flex;
   gap: 8px;
   z-index: 7;
@@ -1148,7 +1156,7 @@ body {
 
 .clean-toast {
   position: absolute;
-  bottom: 18px;
+  bottom: var(--ui-y);
   left: 50%;
   transform: translateX(-50%);
   background: rgba(18, 22, 34, 0.82);
@@ -1203,7 +1211,7 @@ body {
   background: radial-gradient(ellipse at center, rgba(15, 20, 40, 0.3), rgba(15, 20, 40, 0.62));
   z-index: 10;
   overflow-y: auto;
-  padding: 16px;
+  padding: var(--ui-y) var(--ui-x);
 }
 
 .bracket-card {
@@ -1609,7 +1617,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 3vh 3vw;
+  padding: var(--ui-y) var(--ui-x);
   background: radial-gradient(ellipse at center, rgba(8, 18, 34, 0.42), rgba(6, 12, 24, 0.76));
   backdrop-filter: blur(3px);
   z-index: 30;
@@ -1832,8 +1840,8 @@ body {
 /* ---- Broadcast overlay: top-down course map --------------------------- */
 .track-map {
   position: absolute;
-  left: 14px;
-  top: 14px;
+  left: var(--ui-x);
+  top: var(--ui-y);
   width: min(236px, 40vw);
   padding: 8px 10px 6px;
   border-radius: 16px;
