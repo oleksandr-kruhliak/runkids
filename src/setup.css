@@ -207,6 +207,25 @@
   cursor: pointer;
 }
 
+/* Doorway to the other show on the site (the Surprise Eggs page). */
+.setup-show {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  border: 2px dashed #ffc46b;
+  border-radius: 14px;
+  padding: 12px;
+  background: #fff7e8;
+  color: #b5651d;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.setup-show:hover {
+  background: #fff1d8;
+}
+
 /* Race style picker */
 .mode-row {
   display: grid;

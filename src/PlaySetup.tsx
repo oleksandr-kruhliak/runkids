@@ -399,6 +399,9 @@ export default function PlaySetup({
             </label>
           )}
         </div>
+        <button className="setup-show" onClick={() => (window.location.hash = '#/hatch')}>
+          🥚 Surprise Eggs — smash them open →
+        </button>
         <button className="setup-advanced" onClick={onAdvanced}>
           Advanced track builder →
         </button>

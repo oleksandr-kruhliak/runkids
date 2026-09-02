@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, ThreeEvent } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
 import * as THREE from 'three'
-import { AnimParams, Block, Clip } from './model'
-import { blockPose, legPivots, pivotFor, rootPose } from './animate'
+import { AnimParams, Block, Clip, Vec3 } from './model'
+import { blockPose, limbPivots, parentRole, pivotFor, rootPose } from './animate'
 
 const DEG = Math.PI / 180
 
@@ -32,6 +32,7 @@ export default function AnimalView({
 }: Props) {
   const rootRef = useRef<THREE.Group>(null)
   const outer = useRef<Record<string, THREE.Group | null>>({})
+  const inner = useRef<Record<string, THREE.Group | null>>({})
   const tRef = useRef(0)
   const prevClip = useRef<Clip>(clip)
 
@@ -40,10 +41,19 @@ export default function AnimalView({
     tRef.current = 0
   }, [clip])
 
-  const pivots = useMemo(() => {
-    const legs = legPivots(blocks)
-    const m: Record<string, [number, number, number]> = {}
-    for (const b of blocks) m[b.id] = legs[b.role] ?? pivotFor(b)
+  /**
+   * Where each block hinges. A block below a knee/elbow gets two hinges: the
+   * hip/shoulder it inherits from the segment above, and its own joint.
+   */
+  const rig = useMemo(() => {
+    const limbs = limbPivots(blocks)
+    const m: Record<string, { hinge: Vec3; joint?: Vec3; parent?: ReturnType<typeof parentRole> }> = {}
+    for (const b of blocks) {
+      const parent = parentRole(b.role)
+      const own = limbs[b.role] ?? pivotFor(b)
+      if (parent) m[b.id] = { hinge: limbs[parent] ?? own, joint: own, parent }
+      else m[b.id] = { hinge: own }
+    }
     return m
   }, [blocks])
 
@@ -61,44 +71,68 @@ export default function AnimalView({
     for (const b of blocks) {
       const g = outer.current[b.id]
       if (!g) continue
-      const bp = blockPose(b.role, clip, t, anim)
+      const r = rig[b.id]
+      // Below a joint, the outer group carries the parent segment's swing and
+      // the inner group adds the knee/elbow bend on top of it.
+      const bp = blockPose(r?.parent ?? b.role, clip, t, anim)
       g.rotation.set(bp.rx, bp.ry, bp.rz)
+      const j = inner.current[b.id]
+      if (j) {
+        const jp = blockPose(b.role, clip, t, anim)
+        j.rotation.set(jp.rx, jp.ry, jp.rz)
+      }
     }
   })
 
   return (
     <group ref={rootRef}>
       {blocks.map((b) => {
-        const pv = pivots[b.id] ?? b.pos
+        const r = rig[b.id]
+        const hinge = r?.hinge ?? b.pos
+        const joint = r?.joint ?? hinge
         const selected = b.id === selectedId
         const handleClick = (e: ThreeEvent<MouseEvent>) => {
           e.stopPropagation()
           onSelect?.(b.id)
         }
+        const mesh = (
+          <mesh
+            position={[b.pos[0] - joint[0], b.pos[1] - joint[1], b.pos[2] - joint[2]]}
+            rotation={[b.rot[0] * DEG, b.rot[1] * DEG, b.rot[2] * DEG]}
+            onClick={handleClick}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={b.size} />
+            <meshStandardMaterial
+              color={b.color}
+              flatShading
+              emissive={selected ? '#ffffff' : '#000000'}
+              emissiveIntensity={selected ? 0.28 : 0}
+            />
+            {selected && <Edges scale={1.02} threshold={1} color="#ffffff" />}
+          </mesh>
+        )
         return (
           <group
             key={b.id}
             ref={(el) => {
               outer.current[b.id] = el
             }}
-            position={pv}
+            position={hinge}
           >
-            <mesh
-              position={[b.pos[0] - pv[0], b.pos[1] - pv[1], b.pos[2] - pv[2]]}
-              rotation={[b.rot[0] * DEG, b.rot[1] * DEG, b.rot[2] * DEG]}
-              onClick={handleClick}
-              castShadow
-              receiveShadow
-            >
-              <boxGeometry args={b.size} />
-              <meshStandardMaterial
-                color={b.color}
-                flatShading
-                emissive={selected ? '#ffffff' : '#000000'}
-                emissiveIntensity={selected ? 0.28 : 0}
-              />
-              {selected && <Edges scale={1.02} threshold={1} color="#ffffff" />}
-            </mesh>
+            {r?.joint ? (
+              <group
+                ref={(el) => {
+                  inner.current[b.id] = el
+                }}
+                position={[joint[0] - hinge[0], joint[1] - hinge[1], joint[2] - hinge[2]]}
+              >
+                {mesh}
+              </group>
+            ) : (
+              mesh
+            )}
           </group>
         )
       })}

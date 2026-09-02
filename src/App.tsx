@@ -46,6 +46,7 @@ import Scenery from './env/Scenery'
 import { Birds, Lightning } from './env/Weather'
 import { EnvParams, SUMMER, cloneParams } from './env/model'
 import { downloadRecording, isRecordingSupported, startTabRecording } from './recorder'
+import { enterFullscreen, exitFullscreen } from './fullscreen'
 import { cheer, initAudio, setAudioEnabled, setCrowd, sfx } from './audio'
 import CameraRig, { FocusSpec, FollowCam } from './track/CameraRig'
 import SunLight from './track/SunLight'
@@ -378,6 +379,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         downloadRecording(blob)
         stopRecRef.current = null
         setRecording(false)
+        exitFullscreen()
         showToast('🎬 Video saved to your downloads')
       })
       stopRecRef.current = stop
@@ -579,6 +581,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
         setShow(first)
       }
       if (recSupported) {
+        // Fullscreen before the capture picker, not after: the picker consumes
+        // the click's activation and fullscreen needs a live one.
+        enterFullscreen()
         startRecording(true).then(begin)
         setTimeout(begin, 45_000)
       } else {
@@ -827,6 +832,7 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
     setShow(null)
     setIntroOpen(false)
     setClean(false)
+    exitFullscreen()
     setCrowd(0, 0.5)
     setBracketOpen(false)
     setTourney(null)
@@ -1387,7 +1393,9 @@ export default function App({ onOpenStudio }: { onOpenStudio?: () => void }) {
                   </div>
                 ))}
               </div>
-              <div className="intro-question">Who will win? Leave your guess in the comments! 👇</div>
+              {/* Kids' videos have their comments turned off by YouTube, so
+                  the call to action is one the viewer can answer at home. */}
+              <div className="intro-question">Who will win? Shout your pick out loud! 🗣️</div>
               <button
                 className="intro-go"
                 onClick={() => {

@@ -10,6 +10,11 @@ export const CLIPS: Clip[] = ['idle', 'walk', 'jump']
 /**
  * A block's role drives how it animates. The four leg roles are paired
  * diagonally for a natural trot; other roles get light idle motion for life.
+ *
+ * Each leg can be split in two: blocks tagged `leg*` are the upper segment and
+ * hinge at the hip/shoulder, blocks tagged `lower*` are the segment below the
+ * knee/elbow and hinge there, on top of whatever the upper segment is doing.
+ * Leaving the lower roles unused keeps the old single-segment limb.
  */
 export type Role =
   | 'body'
@@ -20,6 +25,10 @@ export type Role =
   | 'legFR'
   | 'legBL'
   | 'legBR'
+  | 'lowerFL'
+  | 'lowerFR'
+  | 'lowerBL'
+  | 'lowerBR'
   | 'none'
 
 export const ROLES: { role: Role; label: string; hint: string }[] = [
@@ -28,9 +37,13 @@ export const ROLES: { role: Role; label: string; hint: string }[] = [
   { role: 'ear', label: 'Ear', hint: 'Flaps / sways' },
   { role: 'tail', label: 'Tail', hint: 'Wags' },
   { role: 'legFL', label: 'Leg · front-L', hint: 'Swings (trot)' },
+  { role: 'lowerFL', label: '↳ lower · front-L', hint: 'Elbow — folds forward' },
   { role: 'legFR', label: 'Leg · front-R', hint: 'Swings (trot)' },
+  { role: 'lowerFR', label: '↳ lower · front-R', hint: 'Elbow — folds forward' },
   { role: 'legBL', label: 'Leg · back-L', hint: 'Swings (trot)' },
+  { role: 'lowerBL', label: '↳ lower · back-L', hint: 'Knee — folds back' },
   { role: 'legBR', label: 'Leg · back-R', hint: 'Swings (trot)' },
+  { role: 'lowerBR', label: '↳ lower · back-R', hint: 'Knee — folds back' },
   { role: 'none', label: 'Static', hint: 'Never moves' },
 ]
 

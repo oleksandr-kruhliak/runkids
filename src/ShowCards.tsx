@@ -6,6 +6,10 @@ import { clockUnit } from './format'
 // Full-screen broadcast cards for the auto-show. They sit between the races
 // of a recorded episode, so everything on them is sized to be read from a
 // phone screen: no dense tables, no small print, one idea per card.
+//
+// Nothing here ever asks the viewer to comment. YouTube turns comments off on
+// anything marked made-for-kids, so a "tell us below" would point at a box
+// that isn't there — the cards ask for an answer out loud instead.
 
 /** Big number / medal for a finishing place. */
 const medal = (i: number) => ['🥇', '🥈', '🥉'][i] ?? `${i + 1}`
@@ -63,7 +67,7 @@ export function LineupCard({
             </div>
           ))}
         </div>
-        <p className="show-ask">{note ?? 'Who will win? Say it out loud! 👇'}</p>
+        <p className="show-ask">{note ?? 'Who will win? Say it out loud! 🗣️'}</p>
       </div>
     </div>
   )
@@ -130,7 +134,7 @@ export function OutroCard({
             <span className="show-champname">👑 {champion.name}</span>
           </div>
         )}
-        <p className="show-ask">Who should race next time? Tell us below! 👇</p>
+        <p className="show-ask">Who should race next time? Shout it out! 🗣️</p>
         <p className="show-sub">Like &amp; subscribe for more cube races 🏁</p>
       </div>
     </div>

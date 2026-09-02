@@ -1,0 +1,165 @@
+/* Egg Hatch page. The broadcast cards (.show-overlay / .show-card) and the
+   corner chips are shared with the race show; everything here is what the
+   hatching adds on top. */
+
+.hatch {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #dfeffb;
+  touch-action: manipulation;
+  /* Same broadcast safe area the race stage uses — the shared HUD pieces
+     (.play-corner, .clean-toast) position themselves against these. */
+  container-type: size;
+  --ui-x: 5cqw;
+  --ui-y: 5cqh;
+}
+
+.hatch canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Egg emoji standing in for the animal on the opening card — no spoilers. */
+.hatch-eggface {
+  font-size: 46px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.18));
+}
+
+/* ---- "Egg 2 of 5" and the hit pips ------------------------------------ */
+.hatch-kicker {
+  position: absolute;
+  top: var(--ui-y);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 20px;
+  border-radius: 999px;
+  background: rgba(10, 20, 36, 0.55);
+  backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  z-index: 25;
+  pointer-events: none;
+}
+
+.hatch-count {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* Which tool is doing the smashing, between the count and the pips. */
+.hatch-tool {
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---- Tap prompt (manual mode) ----------------------------------------- */
+.hatch-tap {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--ui-y) + 60px);
+  transform: translateX(-50%);
+  padding: 12px 26px;
+  border-radius: 999px;
+  background: #ff8a3d;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.3);
+  z-index: 25;
+  pointer-events: none;
+  animation: hatch-nudge 1.4s ease-in-out infinite;
+}
+
+@keyframes hatch-nudge {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-7px);
+  }
+}
+
+/* ---- The reveal lower third ------------------------------------------- */
+.hatch-reveal {
+  position: absolute;
+  left: 50%;
+  bottom: var(--ui-y);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 30px 14px 18px;
+  border-radius: 26px;
+  background: linear-gradient(165deg, #ffffff, #f2f7ff);
+  border: 5px solid var(--c, #ffd45e);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
+  z-index: 26;
+  pointer-events: none;
+  animation: hatch-reveal-in 520ms cubic-bezier(0.16, 1.1, 0.3, 1);
+}
+
+@keyframes hatch-reveal-in {
+  from {
+    transform: translateX(-50%) translateY(40px) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.hatch-reveal .avatar {
+  image-rendering: pixelated;
+}
+
+.hatch-reveal-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.hatch-reveal-kicker {
+  font-size: 17px;
+  font-weight: 700;
+  color: #5a6a80;
+}
+
+.hatch-reveal-name {
+  font-size: clamp(30px, 5vw, 50px);
+  font-weight: 900;
+  color: #16233a;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Setup extras ------------------------------------------------------ */
+.hatch-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+@media (max-width: 560px) {
+  .hatch-reveal {
+    gap: 12px;
+    padding: 10px 20px 10px 12px;
+  }
+
+  .hatch-kicker {
+    gap: 10px;
+    padding: 7px 15px;
+  }
+}

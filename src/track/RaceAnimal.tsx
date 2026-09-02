@@ -2,8 +2,19 @@ import { MutableRefObject, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { AnimalDesign, Block } from '../studio/model'
-import { blockPose, legPivots, pivotFor, rootPose } from '../studio/animate'
+import { AnimalDesign, Block, Clip, Role, Vec3 } from '../studio/model'
+import { LIMB_ROLES, blockPose, limbPivots, parentRole, pivotFor, rootPose } from '../studio/animate'
+
+/** One merged limb segment: its geometry plus the hinge(s) it swings about. */
+interface LimbPart {
+  role: Role
+  /** Hip/shoulder — for a lower segment, the one it inherits from above. */
+  hinge: Vec3
+  /** Knee/elbow, only for segments below a joint. */
+  joint?: Vec3
+  parent?: Role
+  geom: THREE.BufferGeometry
+}
 
 const DEG = Math.PI / 180
 const TARGET = 2.0 // world units the animal's largest dimension is scaled to
@@ -18,6 +29,11 @@ interface Props {
   groundDrop?: number
   /** Yaw so the model faces forward along the track (designs face +Z). */
   faceY?: number
+  /**
+   * Force a clip instead of deriving one from `speedRef` — the Egg Hatch show
+   * uses it to make a freshly hatched animal jump for joy.
+   */
+  clip?: Clip
 }
 
 /** Merge a set of blocks into one vertex-coloured geometry (origin-relative). */
@@ -57,7 +73,9 @@ function mergedGeometry(blocks: Block[], origin: [number, number, number]): THRE
  * Renders a saved cube-animal design as a track racer. High-detail designs
  * (hundreds of voxels) stay cheap: blocks that never rotate (body/static) are
  * merged into one mesh, the head is merged and rotates rigidly about a shared
- * neck pivot, and only the animated limbs remain individual meshes.
+ * neck pivot, and each limb segment merges into one mesh too — every block in
+ * it shares a hinge, so a 300-voxel leg still costs a single draw call. Only
+ * ears and tails, which hinge per block, stay individual meshes.
  */
 export default function RaceAnimal({
   design,
@@ -65,13 +83,16 @@ export default function RaceAnimal({
   laneIndex = 0,
   groundDrop = 0,
   faceY = 0,
+  clip: clipOverride,
 }: Props) {
   const bobRef = useRef<THREE.Group>(null)
   const headRef = useRef<THREE.Group>(null)
   const outer = useRef<Record<string, THREE.Group | null>>({})
+  const limbOuter = useRef<Record<string, THREE.Group | null>>({})
+  const limbInner = useRef<Record<string, THREE.Group | null>>({})
   const tRef = useRef(0)
 
-  const { staticGeom, headGeom, headPivot, dynamicBlocks, pivots, scale, offset } = useMemo(() => {
+  const { staticGeom, headGeom, headPivot, limbParts, dynamicBlocks, pivots, scale, offset } = useMemo(() => {
     // Bounding box over every block corner.
     const min = new THREE.Vector3(Infinity, Infinity, Infinity)
     const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity)
@@ -93,11 +114,16 @@ export default function RaceAnimal({
 
     const statics: Block[] = []
     const heads: Block[] = []
+    const perRole = new Map<Role, Block[]>()
     const dynamicBlocks: Block[] = []
     for (const b of design.blocks) {
       if (b.role === 'body' || b.role === 'none') statics.push(b)
       else if (b.role === 'head') heads.push(b)
-      else dynamicBlocks.push(b)
+      else if (LIMB_ROLES.includes(b.role)) {
+        const list = perRole.get(b.role)
+        if (list) list.push(b)
+        else perRole.set(b.role, [b])
+      } else dynamicBlocks.push(b) // ears / tails: one hinge per block
     }
 
     // The whole head nods about one shared neck pivot (back-bottom of its
@@ -117,14 +143,29 @@ export default function RaceAnimal({
       headPivot[2] = hz
     }
 
-    const legs = legPivots(design.blocks)
+    const limbs = limbPivots(design.blocks)
+    const limbParts: LimbPart[] = []
+    for (const role of LIMB_ROLES) {
+      const bs = perRole.get(role)
+      const own = limbs[role]
+      if (!bs || !own) continue
+      const geom = mergedGeometry(bs, own)
+      if (!geom) continue
+      const parent = parentRole(role)
+      // A lower segment hangs off the hip/shoulder above it; if the design has
+      // no upper segment to hang from, it just hinges at its own joint.
+      const hinge = parent ? limbs[parent] ?? own : own
+      limbParts.push(parent ? { role, hinge, joint: own, parent, geom } : { role, hinge, geom })
+    }
+
     const pivots: Record<string, [number, number, number]> = {}
-    for (const b of dynamicBlocks) pivots[b.id] = legs[b.role] ?? pivotFor(b)
+    for (const b of dynamicBlocks) pivots[b.id] = pivotFor(b)
 
     return {
       staticGeom: mergedGeometry(statics, [0, 0, 0]),
       headGeom: mergedGeometry(heads, headPivot),
       headPivot,
+      limbParts,
       dynamicBlocks,
       pivots,
       scale,
@@ -137,16 +178,17 @@ export default function RaceAnimal({
     return () => {
       staticGeom?.dispose()
       headGeom?.dispose()
+      limbParts.forEach((p) => p.geom.dispose())
     }
-  }, [staticGeom, headGeom])
+  }, [staticGeom, headGeom, limbParts])
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, 0.05)
     const speed = Math.abs(speedRef?.current?.[laneIndex] ?? 0)
     const moving = speed > 0.2
-    const clip = moving ? 'walk' : 'idle'
+    const clip: Clip = clipOverride ?? (moving ? 'walk' : 'idle')
     // Advance the clock, speeding the walk cadence up/down with velocity.
-    const cadence = moving ? THREE.MathUtils.clamp(speed / RUN_REF_SPEED, 0.6, 1.8) : 1
+    const cadence = clip === 'walk' ? THREE.MathUtils.clamp(speed / RUN_REF_SPEED, 0.6, 1.8) : 1
     tRef.current += dt * cadence
     const t = tRef.current
 
@@ -158,6 +200,19 @@ export default function RaceAnimal({
     if (headRef.current) {
       const hp = blockPose('head', clip, t, design.anim)
       headRef.current.rotation.set(hp.rx, hp.ry, hp.rz)
+    }
+    for (const p of limbParts) {
+      const g = limbOuter.current[p.role]
+      if (g) {
+        // Below a joint the outer group carries the parent segment's swing.
+        const bp = blockPose(p.parent ?? p.role, clip, t, design.anim)
+        g.rotation.set(bp.rx, bp.ry, bp.rz)
+      }
+      const j = limbInner.current[p.role]
+      if (j) {
+        const jp = blockPose(p.role, clip, t, design.anim)
+        j.rotation.set(jp.rx, jp.ry, jp.rz)
+      }
     }
     for (const b of dynamicBlocks) {
       const g = outer.current[b.id]
@@ -183,6 +238,39 @@ export default function RaceAnimal({
               </mesh>
             </group>
           )}
+          {limbParts.map((p) => {
+            const mesh = (
+              <mesh geometry={p.geom} castShadow>
+                <meshStandardMaterial vertexColors flatShading />
+              </mesh>
+            )
+            return (
+              <group
+                key={p.role}
+                ref={(el) => {
+                  limbOuter.current[p.role] = el
+                }}
+                position={p.hinge}
+              >
+                {p.joint ? (
+                  <group
+                    ref={(el) => {
+                      limbInner.current[p.role] = el
+                    }}
+                    position={[
+                      p.joint[0] - p.hinge[0],
+                      p.joint[1] - p.hinge[1],
+                      p.joint[2] - p.hinge[2],
+                    ]}
+                  >
+                    {mesh}
+                  </group>
+                ) : (
+                  mesh
+                )}
+              </group>
+            )
+          })}
           {dynamicBlocks.map((b) => {
             const pv = pivots[b.id] ?? b.pos
             return (
