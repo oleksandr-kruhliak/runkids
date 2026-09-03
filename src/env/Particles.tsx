@@ -155,7 +155,10 @@ export default function Particles({ kind, density, center, radius }: Props) {
       const sz = spec.sway ? Math.cos(t * 0.6 + p.phase * 1.3) * spec.sway * 0.7 : 0
       dummy.position.set(
         camX + wrap(center.x + p.x - camX) + sx,
-        y,
+        // center.y is the floor the column stands on — 0 on the ground-level
+        // courses, and the camera's own height in the Cloud Climb, where the
+        // weather has to keep up with an animal bouncing into the sky.
+        center.y + y,
         camZ + wrap(center.z + p.z - camZ) + sz,
       )
       if (spec.tumble) {

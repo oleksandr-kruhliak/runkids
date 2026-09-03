@@ -402,6 +402,9 @@ export default function PlaySetup({
         <button className="setup-show" onClick={() => (window.location.hash = '#/hatch')}>
           🥚 Surprise Eggs — smash them open →
         </button>
+        <button className="setup-show" onClick={() => (window.location.hash = '#/jump')}>
+          ☁️ Cloud Climb — bounce to the sky →
+        </button>
         <button className="setup-advanced" onClick={onAdvanced}>
           Advanced track builder →
         </button>

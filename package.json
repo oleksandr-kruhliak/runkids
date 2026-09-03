@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "record": "node scripts/record-race.mjs",
-    "record:hatch": "node scripts/record-hatch.mjs"
+    "record:hatch": "node scripts/record-hatch.mjs",
+    "record:jump": "node scripts/record-jump.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.0",
