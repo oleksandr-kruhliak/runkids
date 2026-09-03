@@ -4,7 +4,7 @@ import { AnimalDesign } from '../studio/model'
 import { ALL_PRESETS, PARTICLE_META, ParticleKind, cloneParams } from '../env/model'
 import { loadEnvLibrary } from '../env/library'
 import AnimalAvatar from '../Avatar'
-import { EggPick, HatchConfig, MIN_HITS, episodeSecs } from './model'
+import { AVG_EGG_DEFAULT, EggPick, HatchConfig, MIN_HITS, episodeSecs } from './model'
 import { TOOLS } from './tools'
 import { PAINTERS } from './painters'
 import '../setup.css'
@@ -73,6 +73,7 @@ export default function HatchSetup({
   // The toughest an egg can get; every egg rolls its own count from MIN_HITS
   // up to this, so no two eggs give up at the same moment.
   const [maxHits, setMaxHits] = useState(6)
+  const [avgEgg, setAvgEgg] = useState(AVG_EGG_DEFAULT)
   const [tool, setTool] = useState<string>('random')
   const [painter, setPainter] = useState<string>('random')
   const [auto, setAuto] = useState(true)
@@ -98,7 +99,7 @@ export default function HatchSetup({
 
   const order = (key: string) => selected.indexOf(key)
   const canPlay = selected.length >= MIN_EGGS
-  const lengthSecs = episodeSecs(Math.max(1, selected.length), maxHits)
+  const lengthSecs = episodeSecs(Math.max(1, selected.length), maxHits, avgEgg)
 
   const start = (record: boolean) => {
     const byKey = new Map(options.map((o) => [o.key, o]))
@@ -118,6 +119,7 @@ export default function HatchSetup({
       {
         picks,
         maxHits,
+        avgEgg,
         tool: tool === 'random' ? undefined : tool,
         painter: painter === 'random' ? undefined : painter,
         // A filmed episode always runs itself; tapping is for playing along.
@@ -194,6 +196,26 @@ export default function HatchSetup({
               <span className="mode-desc">Tap or press space to swing</span>
             </button>
           </div>
+          <label className="slider-line">
+            <span className="slider-name">Average per egg</span>
+            {/* 8 to 30: below that the blows themselves set the floor, above
+                it the showcase hits its cap — either way the dial stops doing
+                anything, and a slider with dead ends is a bad control. */}
+            <input
+              type="range"
+              min={8}
+              max={30}
+              step={1}
+              value={avgEgg}
+              onChange={(e) => setAvgEgg(parseInt(e.target.value))}
+            />
+            <span className="slider-out">{fmtLen(avgEgg)}</span>
+          </label>
+          <p className="setup-note">
+            How long each egg takes, cracking to hatching. The show paces the
+            animal's moment around the blows to land on it — so this is the dial
+            for how long the finished video runs.
+          </p>
           <label className="slider-line">
             <span className="slider-name">Toughest egg</span>
             <input

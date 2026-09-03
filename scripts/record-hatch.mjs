@@ -11,6 +11,7 @@
 //   --eggs <n>         How many eggs to smash (1–8)          (default 4)
 //   --pick <a,b,c>     Specific animals by name, in order; overrides --eggs
 //   --hits <n>         Toughest egg: each one rolls 3..n blows  (default 6)
+//   --avg <seconds>    Seconds per egg, cracking to hatching     (default 10)
 //   --tool <name>      Pin one tool ("Toy mallet", "Pickaxe", "Baseball
 //                      bat", …) instead of a surprise one per egg
 //   --env <name>       Environment chip: Summer | Winter | … (default Summer)
@@ -40,6 +41,7 @@ const pick = opt('pick', '')
   .filter(Boolean)
 const eggs = Math.max(1, Math.min(8, parseInt(opt('eggs', '4'), 10)))
 const hits = Math.max(3, Math.min(9, parseInt(opt('hits', '6'), 10)))
+const avg = Math.max(8, Math.min(30, parseInt(opt('avg', '10'), 10)))
 const tool = opt('tool', '')
 const env = opt('env', 'Summer')
 const weather = opt('weather', 'Auto')
@@ -57,15 +59,17 @@ const dropMs = Math.max(0, count - 1) * 520 + 1400 + 900
 // Two passes of the painter: the base coat, then the patterns.
 const paintMs = (2200 + Math.max(0, count - 1) * 1700 + 1600) * 2 + 3500
 const finaleMs = 11000 + count * 3000 + 1200
-const episodeMs =
-  4200 + dropMs + paintMs + count * (1100 + hits * 1200 + 700 + 3400) + finaleMs + 20000
+// An egg takes its budgeted time, unless the blows alone overrun it — the
+// showcase is clamped, so a tough short-budget egg still runs longer.
+const perEggMs = Math.max(avg * 1000, 1100 + hits * 1200 + 700 + 2000)
+const episodeMs = 4200 + dropMs + paintMs + count * perEggMs + finaleMs + 20000
 
 const videoDir = join(tmpdir(), `runkids-hatch-${Date.now()}`)
 mkdirSync(videoDir, { recursive: true })
 
 console.log(
   `Recording: ${pick.length ? `animals=${pick.join('+')}` : `eggs=${eggs}`}` +
-    ` hits=3-${hits} tool=${tool || 'surprise'} env=${env} weather=${weather} → ${out}`,
+    ` hits=3-${hits} avg=${avg}s tool=${tool || 'surprise'} env=${env} weather=${weather} → ${out}`,
 )
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true }).catch((e) => {
@@ -114,7 +118,9 @@ try {
     }
   }
 
-  await page.locator('.slider-line', { hasText: 'Toughest egg' }).locator('input').fill(String(hits))
+  const slider = (label) => page.locator('.slider-line', { hasText: label }).locator('input')
+  await slider('Average per egg').fill(String(avg))
+  await slider('Toughest egg').fill(String(hits))
   if (tool) {
     const chip = page.locator('.env-chip', { hasText: tool }).first()
     if (await chip.count()) await chip.click()

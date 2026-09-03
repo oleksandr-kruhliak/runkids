@@ -22,7 +22,6 @@ import {
   HatchBeat,
   HatchConfig,
   HIT_GAP_MS,
-  MEET_MS,
   OUTRO_MS,
   PAINT_EACH_MS,
   PARADE_MS,
@@ -34,6 +33,7 @@ import {
   dropStartMs,
   episodeTitle,
   freshEggs,
+  meetMsFor,
   paintBeatMs,
   paintStartMs,
   recapMs,
@@ -206,7 +206,10 @@ export default function HatchShow({ onExit }: { onExit: () => void }) {
       sfx('chime', 0.8)
     })
     after(3400, () => setPartyAt(0))
-    after(BURST_MS + MEET_MS, () => {
+    // The showcase takes up whatever's left of this egg's time budget, so a
+    // tough egg (more blows) lingers less on the animal than an easy one.
+    const meet = meetMsFor(config.avgEgg, egg.hits)
+    after(BURST_MS + meet, () => {
       const next = i + 1
       if (next < config.picks.length) goEggRef.current(next)
       else paradeRef.current()

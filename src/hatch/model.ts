@@ -28,6 +28,11 @@ export interface HatchConfig {
   tool?: string
   /** Pin the painter by key, or undefined to draw one for the episode. */
   painter?: string
+  /**
+   * Seconds each egg gets, start to finish. The show paces the showcase around
+   * the blows to hit it — the same idea as the race's average lap.
+   */
+  avgEgg: number
   env: EnvParams
   envName: string
   /** Seeds the egg styles, crack lines, tools and hit counts. */
@@ -128,8 +133,15 @@ export const SETTLE_MS = 1100
 export const HIT_GAP_MS = 180
 /** Shell flying / animal climbing out, before the name card lands. */
 export const BURST_MS = 700
-/** How long the freshly hatched animal holds the screen. */
-export const MEET_MS = 3400
+/**
+ * How long the freshly hatched animal holds the screen. This is the give in an
+ * egg's beat — see `meetMsFor`, which stretches it so the whole egg comes out
+ * at the length the setup screen asked for.
+ */
+export const MEET_MIN_MS = 2000
+export const MEET_MAX_MS = 24000
+/** Default seconds per egg, matching what the show ran at before it was a dial. */
+export const AVG_EGG_DEFAULT = 10
 /** A hold on the finished row, once both coats are on and before the smashing. */
 export const ADMIRE_MS = 3500
 /** The curtain call: everyone steps off their nest and celebrates. */
@@ -228,9 +240,31 @@ export function paintStartMs(i: number): number {
   return CLOUD_IN_MS + i * PAINT_EACH_MS - PAINT_MS * 0.45
 }
 
+/**
+ * The part of an egg's beat that can't be stretched: the camera settling, the
+ * blows themselves, and the burst. Tool swings are hand-tuned animations, so
+ * pacing has to come out of the holds around them rather than out of these.
+ */
+function fixedEggMs(hits: number): number {
+  return SETTLE_MS + hits * (AVG_SWING_MS + HIT_GAP_MS) + BURST_MS
+}
+
+/**
+ * How long to hold on the hatched animal, so that the whole egg — settle,
+ * smashing, burst and showcase — lands on `avgEgg` seconds.
+ *
+ * A tough egg spends more of its budget on the smashing and gets a shorter
+ * showcase; an easy one lingers on the animal instead. Clamped at both ends so
+ * a very long or very short egg still reads.
+ */
+export function meetMsFor(avgEgg: number, hits: number): number {
+  const slack = avgEgg * 1000 - fixedEggMs(hits)
+  return Math.max(MEET_MIN_MS, Math.min(MEET_MAX_MS, slack))
+}
+
 /** One egg, start to finish — used to preview the episode length in setup. */
-export function eggMs(hits: number): number {
-  return SETTLE_MS + hits * (AVG_SWING_MS + HIT_GAP_MS) + BURST_MS + MEET_MS
+export function eggMs(avgEgg: number, hits: number): number {
+  return fixedEggMs(hits) + meetMsFor(avgEgg, hits)
 }
 
 /**
@@ -238,7 +272,7 @@ export function eggMs(hits: number): number {
  * Both the hit counts and the tools are rolled at showtime, so this works off
  * the averages — it's a hint, not a promise.
  */
-export function episodeSecs(count: number, maxHits: number): number {
+export function episodeSecs(count: number, maxHits: number, avgEgg: number): number {
   const avgHits = (MIN_HITS + Math.max(MIN_HITS, maxHits)) / 2
   return Math.round(
     (TITLE_MS +
@@ -246,7 +280,7 @@ export function episodeSecs(count: number, maxHits: number): number {
       // Two passes of the painter: base coat, then the pattern.
       paintBeatMs(count) * 2 +
       ADMIRE_MS +
-      count * eggMs(avgHits) +
+      count * eggMs(avgEgg, avgHits) +
       PARADE_MS +
       recapMs(count) +
       OUTRO_MS) /
