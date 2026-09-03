@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "record": "node scripts/record-race.mjs",
     "record:hatch": "node scripts/record-hatch.mjs",
-    "record:jump": "node scripts/record-jump.mjs"
+    "record:jump": "node scripts/record-jump.mjs",
+    "record:bowl": "node scripts/record-bowl.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.0",

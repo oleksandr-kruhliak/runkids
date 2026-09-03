@@ -1,0 +1,363 @@
+/* Alpine Strike page. The broadcast cards (.show-overlay / .show-card) and the
+   corner chips are shared with the race show; everything here is what the
+   bowling adds on top. */
+
+.bowl {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #dfeffb;
+  touch-action: manipulation;
+  /* Same broadcast safe area the race stage uses — the shared HUD pieces
+     (.play-corner, .clean-toast) position themselves against these. */
+  container-type: size;
+  --ui-x: 5cqw;
+  --ui-y: 5cqh;
+}
+
+.bowl canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- 3 - 2 - 1 - GO ---------------------------------------------------- */
+.bowl-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 26;
+  pointer-events: none;
+  font-size: clamp(90px, 22vw, 220px);
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 34px rgba(8, 18, 34, 0.5);
+  animation: bowl-count-in 700ms cubic-bezier(0.16, 1.1, 0.3, 1);
+}
+
+/* "Next up: Fox" between turns — the same slot, at a size a name fits in. */
+.bowl-count.next {
+  font-size: clamp(34px, 7vw, 84px);
+  line-height: 1.1;
+  text-align: center;
+  /* Up in the sky, not dead centre: the camera between turns is framed on the
+     animal standing by its board, and the name landed on top of it. */
+  place-items: start center;
+  padding-top: 14cqh;
+}
+
+.bowl-count.next small {
+  display: block;
+  font-size: 0.45em;
+  font-weight: 800;
+  opacity: 0.85;
+}
+
+@keyframes bowl-count-in {
+  from {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---- "62% down the mountain" ------------------------------------------- */
+.bowl-kicker {
+  position: absolute;
+  top: var(--ui-y);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 20px;
+  border-radius: 999px;
+  background: rgba(10, 20, 36, 0.55);
+  backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  z-index: 25;
+  pointer-events: none;
+}
+
+.bowl-goal {
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+/* ---- The live leaderboard down the right ------------------------------- */
+.bowl-board {
+  position: absolute;
+  top: 50%;
+  right: var(--ui-x);
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.bowl-row-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 7px;
+  border-radius: 999px;
+  background: rgba(10, 20, 36, 0.55);
+  backdrop-filter: blur(6px);
+  border: 3px solid var(--c, #ffd45e);
+  /* The board reorders every time a rack goes over, so the rows slide rather
+     than snap. */
+  transition: transform 260ms ease;
+}
+
+/* A rider that has rolled is done for the episode — the row goes solid, which
+   is how the viewer tells a settled score from one still being ridden for. */
+.bowl-row-item.done {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.bowl-row-item.done .bowl-name,
+.bowl-row-item.done .bowl-pins,
+.bowl-row-item.done .bowl-place {
+  color: #16233a;
+}
+
+.bowl-place {
+  width: 22px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 900;
+  color: #ffd45e;
+}
+
+.bowl-row-item .avatar {
+  image-rendering: pixelated;
+}
+
+.bowl-name {
+  min-width: 68px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.bowl-pins,
+.bowl-speed {
+  min-width: 52px;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.bowl-pins {
+  color: #16233a;
+}
+
+.bowl-speed {
+  color: #ffe27a;
+}
+
+/* ---- Mid-episode callouts: an arrival, or a strike ---------------------
+   Along the bottom, not the top: the chase camera keeps the pack high in
+   frame, and a banner up there lands squarely on the animal it is shouting
+   about. */
+.bowl-flash {
+  position: absolute;
+  left: 50%;
+  bottom: var(--ui-y);
+  transform: translateX(-50%);
+  padding: 8px 22px;
+  border-radius: 999px;
+  background: linear-gradient(165deg, #ffffff, #eaf3ff);
+  border: 3px solid #6fc2ff;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
+  color: #16233a;
+  font-size: 19px;
+  font-weight: 900;
+  z-index: 26;
+  pointer-events: none;
+  animation: bowl-pop-in 420ms cubic-bezier(0.16, 1.1, 0.3, 1);
+}
+
+/* A strike is the biggest thing that can happen in the episode, so it does not
+   look like an arrival that happened to be worth mentioning. */
+.bowl-flash.strike {
+  border-color: #ff9a3c;
+  background: linear-gradient(165deg, #fffdf6, #ffeccd);
+  font-size: 23px;
+}
+
+@keyframes bowl-pop-in {
+  from {
+    transform: translateX(-50%) translateY(16px) scale(0.86);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* ---- The winner's lower third ------------------------------------------ */
+.bowl-winner {
+  position: absolute;
+  left: 50%;
+  bottom: var(--ui-y);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 30px 14px 18px;
+  border-radius: 26px;
+  background: linear-gradient(165deg, #ffffff, #f2f7ff);
+  border: 5px solid var(--c, #ffd45e);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.38);
+  z-index: 26;
+  pointer-events: none;
+  animation: bowl-winner-in 520ms cubic-bezier(0.16, 1.1, 0.3, 1);
+}
+
+@keyframes bowl-winner-in {
+  from {
+    transform: translateX(-50%) translateY(40px) scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.bowl-winner .avatar {
+  image-rendering: pixelated;
+}
+
+.bowl-winner-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.bowl-winner-kicker {
+  font-size: 17px;
+  font-weight: 700;
+  color: #5a6a80;
+}
+
+.bowl-winner-name {
+  font-size: clamp(28px, 4.6vw, 46px);
+  font-weight: 900;
+  color: #16233a;
+  letter-spacing: -0.01em;
+}
+
+/* ---- The placings card ------------------------------------------------- */
+.bowl-results {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bowl-results li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px 8px 10px;
+  border-radius: 18px;
+  background: #f5f9ff;
+  border-left: 8px solid var(--c, #ffd45e);
+}
+
+.bowl-results .avatar {
+  image-rendering: pixelated;
+}
+
+.bowl-results .bowl-name {
+  flex: 1;
+  color: #16233a;
+  font-size: 20px;
+}
+
+.bowl-medal {
+  width: 34px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 900;
+  color: #5a6a80;
+}
+
+.bowl-score {
+  min-width: 34px;
+  text-align: center;
+  color: #16233a;
+  font-size: 22px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.bowl-extra {
+  min-width: 132px;
+  text-align: right;
+  color: #5a6a80;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* ---- Setup extras ------------------------------------------------------ */
+/* What the hazard dial scatters. Flat on purpose: these are labels, not
+   choices, so they must not read as buttons that failed to depress. */
+.bowl-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.bowl-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #eef4ff;
+  color: #4a5a72;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bowl-row {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+@media (max-width: 560px) {
+  .bowl-board {
+    gap: 6px;
+  }
+
+  .bowl-name {
+    min-width: 0;
+    font-size: 14px;
+  }
+
+  .bowl-winner {
+    gap: 12px;
+    padding: 10px 20px 10px 12px;
+  }
+}
