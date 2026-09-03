@@ -463,8 +463,9 @@ export type JumpEvent =
   | { kind: 'caught'; pad: PadKind }
   | { kind: 'finish' }
 
-/** How far below the camera an animal drops before a bubble comes for it. */
-export const RESCUE_DROP = 8.5
+/** How far below the bottom of the picture an animal drops before a bubble
+ *  comes for it — far enough that a deep bounce isn't mistaken for a fall. */
+export const RESCUE_DROP = 1.5
 /** How long a rescue takes, in seconds. */
 export const BUBBLE_S = 1.6
 /**
@@ -492,7 +493,7 @@ export const STALL_S = 15
  */
 export function rubberFactor(y: number, leaderY: number, on: boolean): number {
   if (!on) return 1
-  return Math.max(0.94, Math.min(1.3, 1 + (leaderY - y) * 0.02))
+  return Math.max(0.94, Math.min(1.3, 1 + (leaderY - y) * 0.028))
 }
 
 /** Aim for the next bounce: how far off, rolled against the animal's skill. */
@@ -533,8 +534,10 @@ interface StepCtx {
   leaderY: number
   rubber: boolean
   goal: number
-  /** Bottom of what the camera can see; below this a bubble steps in. */
+  /** Where the camera is centred, for choosing where a bubble puts someone. */
   camY: number
+  /** Bottom of what the camera can see; below this a bubble steps in. */
+  viewLow: number
   /** ms into the climb, stamped onto a finish. */
   clock: number
 }
@@ -737,7 +740,7 @@ export function stepRacer(r: Racer, dt: number, ctx: StepCtx): JumpEvent[] {
   // the spot for the rest of the episode. Nothing should be able to strand a
   // climber for a quarter of a minute, whatever new platform turns up later.
   const stalled = performance.now() - r.bestAt > STALL_S * 1000
-  if (r.phase === 'air' && (r.y < ctx.camY - RESCUE_DROP || stalled)) {
+  if (r.phase === 'air' && (r.y < ctx.viewLow - RESCUE_DROP || stalled)) {
     // The bubble puts it back in the bottom of the shot rather than at the
     // very edge of it — dropped right back on the lip, it would be out of
     // frame again inside two bounces.
@@ -870,6 +873,8 @@ export interface Sim {
   clock: number
   /** Where the camera is centred, written back by the rig each frame. */
   camY: number
+  /** World height of the bottom edge of the picture, written back with it. */
+  viewLow: number
   /** Finishers so far, in the order they arrived. */
   places: number[]
 }
@@ -899,6 +904,7 @@ export function buildSim(cfg: JumpConfig): Sim {
     running: false,
     clock: 0,
     camY: 0,
+    viewLow: -8,
     places: [],
   }
 }
@@ -919,6 +925,7 @@ export function stepSim(sim: Sim, dt: number): { lane: number; ev: JumpEvent }[]
       rubber: sim.rubber,
       goal: sim.goal,
       camY: sim.camY,
+      viewLow: sim.viewLow,
       clock: sim.clock,
     })
     for (const ev of evs) {

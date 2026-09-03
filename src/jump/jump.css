@@ -76,75 +76,12 @@
   letter-spacing: 0.02em;
 }
 
-/* ---- The live leaderboard down the right ------------------------------- */
-.jump-board {
-  position: absolute;
-  top: 50%;
-  right: var(--ui-x);
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 25;
-  pointer-events: none;
-}
-
-.jump-row-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 12px 5px 7px;
-  border-radius: 999px;
-  background: rgba(10, 20, 36, 0.55);
-  backdrop-filter: blur(6px);
-  border: 3px solid var(--c, #ffd45e);
-  /* The board reorders every time somebody passes somebody, so the rows slide
-     rather than snap. */
-  transition: transform 260ms ease;
-}
-
-.jump-row-item.done {
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.jump-row-item.done .jump-name,
-.jump-row-item.done .jump-height,
-.jump-row-item.done .jump-place {
-  color: #16233a;
-}
-
-.jump-place {
-  width: 22px;
-  text-align: center;
-  font-size: 16px;
-  font-weight: 900;
-  color: #ffd45e;
-}
-
-.jump-row-item .avatar {
-  image-rendering: pixelated;
-}
-
+/* Shared by the placings card. */
 .jump-name {
   min-width: 68px;
   color: #fff;
   font-size: 16px;
   font-weight: 800;
-}
-
-.jump-height {
-  min-width: 52px;
-  text-align: right;
-  color: #cfe4ff;
-  font-size: 16px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-
-.jump-stars {
-  font-size: 14px;
-  font-weight: 800;
-  color: #ffe27a;
 }
 
 /* ---- Mid-climb callouts: a lead change, or a bubble rescue -------------
@@ -320,10 +257,6 @@
 }
 
 @media (max-width: 560px) {
-  .jump-board {
-    gap: 6px;
-  }
-
   .jump-name {
     min-width: 0;
     font-size: 14px;

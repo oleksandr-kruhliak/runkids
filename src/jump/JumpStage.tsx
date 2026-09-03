@@ -64,26 +64,29 @@ function ClimbSun({
   )
 }
 
-/** How far the camera sits behind the towers for a row of `n` lanes. */
-function camDistance(n: number): number {
-  return 10.5 + Math.max(0, n - 1) * LANE_W * 0.62
-}
-
 /**
- * Roughly the share of the frame's half-width the leaderboard covers down the
- * right-hand edge. The towers are framed left of centre by that much so they
- * never climb behind it.
+ * How close the camera sits to the towers for a row of `n` lanes — as close as
+ * the animals can be shown while still holding enough tower above and below
+ * them for the climb to read. Nothing is framed around the chrome any more:
+ * with the standings gone from the right-hand edge the row sits centred, which
+ * is worth about a fifth of the frame on its own.
  */
-const BOARD_FRAC = 0.2
+function camDistance(n: number): number {
+  return 7.4 + Math.max(0, n - 1) * LANE_W * 0.42
+}
 
 /** How much world width half the frame spans, one unit of distance out. */
 function halfWidthPerUnit(camera: THREE.PerspectiveCamera): number {
   return Math.max(0.05, Math.tan((camera.fov * Math.PI) / 360) * camera.aspect)
 }
 
+/** And how much height — the same thing for the vertical field of view. */
+function halfHeightPerUnit(camera: THREE.PerspectiveCamera): number {
+  return Math.tan((camera.fov * Math.PI) / 360)
+}
+
 /**
- * The closest the camera can be and still hold the whole row across the frame,
- * with the leaderboard's slice of it left over.
+ * The closest the camera can be and still hold the whole row across the frame.
  *
  * A three.js field of view is the vertical one, so how much width a given
  * distance buys depends entirely on the shape of the window: the distance that
@@ -92,8 +95,8 @@ function halfWidthPerUnit(camera: THREE.PerspectiveCamera): number {
  * video — so this is worked out from the live aspect rather than assumed.
  */
 function fitDistance(camera: THREE.PerspectiveCamera, span: number): number {
-  const halfSpan = span / 2 + LANE_HALF + 1.4
-  return halfSpan / (halfWidthPerUnit(camera) * (1 - BOARD_FRAC))
+  const halfSpan = span / 2 + LANE_HALF + 1.1
+  return halfSpan / halfWidthPerUnit(camera)
 }
 
 /**
@@ -125,18 +128,26 @@ function ClimbCam({
   useFrame(({ clock }, delta) => {
     const t = clock.elapsedTime
     const persp = camera as THREE.PerspectiveCamera
-    const dist = Math.max(camDistance(lanes), fitDistance(persp, span))
+    // How near the row can be held without losing the ends of it. Every shot
+    // is floored at this, including the ones that deliberately come in closer
+    // — the climb shot is now near enough that a fraction of it can fall under
+    // the width the row actually needs.
+    const fit = fitDistance(persp, span)
+    const dist = Math.max(camDistance(lanes), fit)
+    const closeUp = Math.max(fit, dist * 0.86)
     if (mode === 'title') {
       // Low and close on the starting line, looking up the towers.
-      want.current.set(Math.sin(t * 0.18) * 0.8, 3.0, dist * 0.86)
+      want.current.set(Math.sin(t * 0.18) * 0.8, 3.0, closeUp)
       wantLook.current.set(0, 2.6, 0)
       sim.camY = 2.4
+      sim.viewLow = -6
     } else if (mode === 'top') {
       // Level with the winners' clouds and a touch closer than the climb, so
       // the line-up fills the frame for the card that lands over it.
-      want.current.set(Math.sin(t * 0.16) * 0.7, goal + 1.6, dist * 0.86)
+      want.current.set(Math.sin(t * 0.16) * 0.7, goal + 1.6, closeUp)
       wantLook.current.set(0, goal + 0.25, 0)
       sim.camY = goal
+      sim.viewLow = goal - 12
     } else {
       let hi = -Infinity
       let lo = Infinity
@@ -149,17 +160,31 @@ function ClimbCam({
       // out the shot drops back and widens rather than abandoning the tail:
       // an animal off the bottom of the frame is one a bubble has to fetch.
       const mid = (hi + lo) / 2
-      const centre = THREE.MathUtils.clamp(mid, hi - 7.5, hi - 1.6)
       const spread = THREE.MathUtils.clamp(hi - lo, 0, 14)
-      // The leaderboard lives down the right-hand edge, so the towers are
-      // framed left of centre to stay out from behind it — by a share of the
-      // frame, not a fixed number of world units, because that is what the
-      // board itself covers. A constant here pushed the outermost tower off
-      // the left of a narrow window.
-      const shift = BOARD_FRAC * halfWidthPerUnit(persp) * dist
-      want.current.set(shift + Math.sin(t * 0.13) * 0.35, centre + 1.1, dist + spread * 0.7)
-      wantLook.current.set(shift, centre + 0.5, 0)
+      // Pull back as the field strings out, so a closer shot doesn't cost the
+      // tail of it.
+      const near = dist + spread * 0.8
+      const h = halfHeightPerUnit(persp) * near // half the frame, in world units
+
+      // The pack rides low in frame so that most of the picture is the tower
+      // above it. What is coming is the interesting half of a climb; the
+      // platforms already cleared are not. The two bounds keep that honest —
+      // the shot may not lose the leader off the top or the tail off the
+      // bottom, and when the field is too strung out to hold both, the leader
+      // wins, because that is the animal the episode is about.
+      const MARGIN = 1.3
+      const centre = Math.min(
+        Math.max(mid + 0.3 * h, hi - h + MARGIN),
+        Math.max(lo + h - MARGIN, hi - h + MARGIN),
+      )
+      want.current.set(Math.sin(t * 0.13) * 0.35, centre + 0.9, near)
+      wantLook.current.set(0, centre + 0.4, 0)
       sim.camY = centre
+      // Where the bottom of the picture actually is. The rescue used to fire a
+      // fixed distance below the camera, which only meant "out of shot" at the
+      // zoom it was tuned at; deriving it means moving the camera in or out
+      // can't quietly change when a bubble comes for someone.
+      sim.viewLow = centre - h
     }
     // Loose enough to glide, tight enough that a spring doesn't leave frame.
     const k = 1 - Math.exp(-delta * (mode === 'climb' ? 3.6 : 2.2))

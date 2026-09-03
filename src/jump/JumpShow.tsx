@@ -65,7 +65,6 @@ interface Standing {
   saves: number
   /** Freezes, honey pads and fans it has been caught by. */
   bumps: number
-  done: boolean
   time: number
 }
 
@@ -343,7 +342,6 @@ export default function JumpShow({ onExit }: { onExit: () => void }) {
           stars: r.stars,
           saves: r.saves,
           bumps: r.bumps,
-          done: r.phase === 'done',
           time: r.finishAt,
         })),
       )
@@ -456,32 +454,15 @@ export default function JumpShow({ onExit }: { onExit: () => void }) {
         </div>
       )}
 
-      {/* The climb: how high the top is, and who is where. */}
+      {/* The climb keeps one line of chrome: how far the leader has got. The
+          standings used to run down the right-hand edge, but a column of names
+          over a vertical race covers the towers it is describing — the animals
+          racing each other up the screen say who is winning better than a
+          leaderboard does. The placings still get their card at the end. */}
       {beat === 'climb' && (
-        <>
-          <div className="jump-kicker">
-            <span className="jump-goal">☁️ {standings[0]?.pct ?? 0}% of the way up</span>
-          </div>
-          <div className="jump-board">
-            {standings.map((s, place) => (
-              <div
-                className={`jump-row-item ${s.done ? 'done' : ''}`}
-                key={s.lane}
-                style={{ ['--c' as string]: colors[s.lane] }}
-              >
-                <span className="jump-place">{place + 1}</span>
-                <AnimalAvatar
-                  design={designs[s.lane]}
-                  colors={avatarColors(designs[s.lane])}
-                  size={30}
-                />
-                <span className="jump-name">{cfg.picks[s.lane].name}</span>
-                <span className="jump-height">{s.done ? '🏁' : `${s.pct}%`}</span>
-                {s.stars > 0 && <span className="jump-stars">⭐{s.stars}</span>}
-              </div>
-            ))}
-          </div>
-        </>
+        <div className="jump-kicker">
+          <span className="jump-goal">☁️ {standings[0]?.pct ?? 0}% of the way up</span>
+        </div>
       )}
 
       {/* Whoever just took the lead, or whoever a bubble just went down for. */}
